@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Cover, Row, PosterCard, POSTER_W } from '@/components/home-rows';
 import { CastPortrait } from '@/components/cast-portrait';
-import { buildRecommendationDetailUrl } from '@/lib/detail-url';
+import { buildRecommendationDetailUrl, buildSourceDetailUrl } from '@/lib/detail-url';
 import { useAbstract } from '@/components/home-hero';
 import { useTmdbHero } from '@/components/use-tmdb-hero';
 import { Icon } from '@/components/icon';
@@ -219,6 +219,16 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
   const { toast } = useToast();
   const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
   const [reversed, setReversed] = useState(false);
+  const [alternatives, setAlternatives] = useState<SearchResultItem[]>([]);
+  const params = useSearchParams();
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(sessionStorage.getItem('libretv-detail-sources') || '[]');
+      if (Array.isArray(saved) && saved.some((entry) => entry?.sourceKey === sourceKey && entry?.vodId === id && entry?.name === title)) {
+        setAlternatives(saved.filter((entry): entry is SearchResultItem => typeof entry?.sourceKey === 'string' && typeof entry?.vodId === 'string' && entry?.name === title && typeof entry?.sourceName === 'string'));
+      } else setAlternatives([]);
+    } catch { setAlternatives([]); }
+  }, [id, sourceKey, title]);
   useEffect(() => {
     const unsubscribe = useAppStore.persist.onFinishHydration(() => setHydrated(true));
     if (useAppStore.persist.hasHydrated()) setHydrated(true);
@@ -250,6 +260,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
           <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => play(0)}><Icon name="play" className="w-4 h-4" /> 播放</button>}<ShareButton title={title} /></div>
         </div>
       </DetailHero>
+      {alternatives.length > 1 && <section className="px-4 sm:px-8 lg:px-12 pt-8"><h2 className="text-lg font-semibold mb-3">选择来源</h2><div className="flex flex-wrap gap-2">{alternatives.map((entry) => <button key={`${entry.sourceKey}_${entry.vodId}`} type="button" aria-pressed={entry.sourceKey === sourceKey && entry.vodId === id} className={entry.sourceKey === sourceKey && entry.vodId === id ? 'btn-hero' : 'btn-ghost'} onClick={() => router.push(buildSourceDetailUrl(entry, params.get('returnTo') || '/'))}>{entry.sourceName}</button>)}</div></section>}
       {episodes.length > 1 && <div className="pt-8 sm:pt-10"><EpisodeRow count={episodes.length} title={title} cover={cover || info?.cover} sourceName={source?.name || sourceName} onPlay={play} reversed={reversed} onReverse={() => setReversed(!reversed)} onCopy={() => { void copyToClipboard(episodes.join('\n')).then((ok) => toast(ok ? '播放链接已复制' : '复制失败，请检查浏览器权限')); }} /></div>}
       <div className="px-4 sm:px-8 lg:px-12 pt-8 sm:pt-10 max-w-[1680px] mx-auto">
         {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length > 1 ? null : detail && episodes.length ? <section>

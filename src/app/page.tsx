@@ -7,8 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
 import { HomeHero } from '@/components/home-hero';
 import { buildRecommendationDetailUrl, buildSourceDetailUrl } from '@/lib/detail-url';
-import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, MOVIE_CATEGORIES, TV_CATEGORIES, useDoubanList } from '@/components/home-rows';
-import { AggregatedCard, aggregateResults } from '@/components/video-card';
+import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, MOVIE_CATEGORIES, TV_CATEGORIES, useDoubanList, Cover } from '@/components/home-rows';
+import { aggregateResults, type AggregatedGroup } from '@/components/video-card';
 import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled } from '@/lib/store';
 import { api } from '@/lib/client-api';
 import type { DoubanItem, SourceSearchOutcome } from '@/lib/types';
@@ -355,16 +355,11 @@ function HomeContent() {
               <NoSourceGuide hasSources={customAPIs.length > 0 || envSources.length > 0} />
             ) : list.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
-                  {visibleGroups.map((group) => (
-                    <AggregatedCard
-                      key={group.key}
-                      group={group}
-                      sources={selectedSources}
-                      onOpen={(item) => router.push(buildSourceDetailUrl(item, window.location.pathname + window.location.search))}
-                    />
-                  ))}
-                </div>
+                <SearchPosterResults groups={visibleGroups} onOpen={(group) => {
+                  const item = { ...group.items[0], pic: group.items[0].pic || group.pic };
+                  try { sessionStorage.setItem('libretv-detail-sources', JSON.stringify(group.items)); } catch { /* 存储不可用时仍可打开详情 */ }
+                  router.push(buildSourceDetailUrl(item, window.location.pathname + window.location.search));
+                }} />
                 {groups.length > visibleCount && (
                   <div className="flex justify-center mt-4">
                     <button
@@ -445,22 +440,22 @@ function SearchSuggestions({ onPick }: { onPick: (title: string) => void }) {
   );
 }
 
+function resultCategory(type?: string): string {
+  if (!type) return '其他';
+  if (/综艺|真人秀/.test(type)) return '综艺';
+  if (/动漫|动画/.test(type)) return '动漫';
+  if (/电影|影片|片/.test(type)) return '电影';
+  if (/电视剧|剧集|剧|连续剧/.test(type)) return '剧集';
+  return '其他';
+}
+
+function SearchPosterResults({ groups, onOpen }: { groups: AggregatedGroup[]; onOpen: (group: AggregatedGroup) => void }) {
+  const sections = ['电影', '剧集', '综艺', '动漫', '其他'].map((title) => ({ title, items: groups.filter((group) => resultCategory(group.typeName) === title) })).filter((section) => section.items.length);
+  return <div className="space-y-9">{sections.map((section) => <section key={section.title} aria-label={section.title}><h2 className="text-xl sm:text-2xl font-bold mb-4">{section.title}</h2><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6">{section.items.map((group) => <button key={group.key} type="button" onClick={() => onOpen(group)} className="min-w-0 text-left group focus-visible:outline-none" aria-label={`查看 ${group.name} 详情`}><div className="aspect-[2/3] rounded-2xl overflow-hidden bg-chip group-focus-visible:ring-2 group-focus-visible:ring-accent"><Cover url={group.pic} alt={group.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" /></div><p className="mt-2 text-sm sm:text-base font-semibold text-content line-clamp-2">{group.name}</p>{group.year && <p className="mt-0.5 text-sm text-muted">{group.year}</p>}</button>)}</div></section>)}</div>;
+}
+
 function ResultsSkeleton() {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        // 结构对齐真实结果卡（左侧缩略图 + 右侧文字块），避免占位与真实卡片形状不符
-        <div key={i} className="card flex h-28 overflow-hidden">
-          <div className="w-[105px] sm:w-[120px] shrink-0 bg-chip animate-pulse" />
-          <div className="flex-1 p-2.5 space-y-2">
-            <div className="h-4 w-3/4 rounded bg-chip animate-pulse" />
-            <div className="h-3 w-1/2 rounded bg-chip animate-pulse" />
-            <div className="h-3 w-full rounded bg-chip animate-pulse" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">{Array.from({ length: 6 }, (_, i) => <div key={i} className="min-w-0"><div className="aspect-[2/3] rounded-2xl bg-chip animate-pulse" /><div className="h-4 w-3/4 rounded bg-chip animate-pulse mt-3" /></div>)}</div>;
 }
 
 /** 无点播源 / 未勾选点播源时的引导（替代旧版首屏静默空白） */
