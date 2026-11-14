@@ -57,13 +57,15 @@ function DetailContent() {
 function DetailHero({ image, fallback, onBack, children, stills, stillIndex = 0, onSelectStill }: { image?: string; fallback?: boolean; onBack: () => void; children: ReactNode; stills?: string[]; stillIndex?: number; onSelectStill?: (index: number) => void }) {
   return (
     <section data-hero className="relative isolate overflow-hidden min-h-[560px] sm:min-h-[620px] lg:min-h-[min(80vh,760px)] flex items-end bg-[#111] text-white">
-      {stills?.length ? stills.map((url, i) => <Cover key={`${url}-${i}`} url={url} alt="" eager={i === stillIndex || i === (stillIndex + 1) % stills.length} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 motion-reduce:transition-none ${i === stillIndex ? 'opacity-100' : 'opacity-0'}`} />) : image && <Cover url={image} alt="" eager className={`absolute inset-0 w-full h-full object-cover ${fallback ? 'blur-2xl brightness-50 scale-110' : ''}`} />}
+      {stills?.length ? stills.map((url, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={`${url}-${i}`} src={url} alt="" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 motion-reduce:transition-none ${i === stillIndex ? 'opacity-100' : 'opacity-0'}`} />)) : image && <Cover url={image} alt="" eager className={`absolute inset-0 w-full h-full object-cover ${fallback ? 'blur-2xl brightness-50 scale-110' : ''}`} />}
       <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/35 to-black/10" />
       <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/25" />
       {fallback && image && <div aria-hidden className="absolute right-4 sm:right-8 lg:right-12 top-32 w-24 sm:w-44 lg:w-52 aspect-[2/3] overflow-hidden rounded-2xl shadow-2xl opacity-90"><Cover url={image} alt="" eager className="w-full h-full object-cover" /></div>}
       <button onClick={onBack} aria-label="返回上一页" className="btn-icon-glass absolute top-4 left-4 sm:left-8 lg:left-12 z-20"><Icon name="chevronLeft" className="w-5 h-5" /></button>
       <div className="relative z-10 w-full px-4 sm:px-8 lg:px-12 pt-32 pb-10 sm:pb-14">{children}</div>
-      {stills && stills.length > 1 && onSelectStill && <div className="absolute z-20 bottom-2 right-4 sm:bottom-5 sm:right-8 lg:right-12 flex items-center gap-1">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" aria-label={`查看第 ${i + 1} 张剧照`} aria-current={i === stillIndex} onClick={() => onSelectStill(i)} className="group grid h-8 min-w-5 place-items-center"><span className={`relative overflow-hidden rounded-full transition-[width,height] duration-500 bg-white/45 ${i === stillIndex ? 'h-1.5 w-6' : 'h-1.5 w-1.5 group-hover:bg-white/75'}`}>{i === stillIndex && <span key={stillIndex} className="hero-progress absolute inset-0 rounded-full bg-white origin-left motion-reduce:animate-none motion-reduce:scale-x-100" style={{ animationDuration: '8000ms' }} />}</span></button>)}</div>}
+      {stills && stills.length > 1 && onSelectStill && <div className="absolute z-20 bottom-2 right-4 sm:bottom-5 sm:right-8 lg:right-12 flex items-center gap-1">{stills.map((url, i) => <button key={i} type="button" aria-label={`查看第 ${i + 1} 张影片画面`} aria-current={i === stillIndex} onClick={() => onSelectStill(i)} className="group grid h-8 min-w-5 place-items-center"><span className={`relative overflow-hidden rounded-full transition-[width,height] duration-500 bg-white/45 ${i === stillIndex ? 'h-1.5 w-6' : 'h-1.5 w-1.5 group-hover:bg-white/75'}`}>{i === stillIndex && <span key={stillIndex} className="hero-progress absolute inset-0 rounded-full bg-white origin-left motion-reduce:animate-none motion-reduce:scale-x-100" style={{ animationDuration: '8000ms' }} />}</span></button>)}</div>}
     </section>
   );
 }
@@ -77,6 +79,86 @@ function ShareButton({ title }: { title: string }) {
     } catch { /* 用户取消分享 */ }
   };
   return <button className="btn-icon-glass" aria-label="分享" onClick={share}><svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1" /></svg></button>;
+}
+
+/** 从可播放的视频中截取画面；无法跨域读取或分辨率不足时保留海报。 */
+function useVideoFrames(title: string) {
+  const [frames, setFrames] = useState<string[]>([]);
+  const { verified } = useAuth();
+  const sourceKeys = useAppStore((state) => state.selectedKeys);
+  useEffect(() => {
+    setFrames([]);
+    if (!verified) return;
+    const controller = new AbortController();
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.preload = 'auto';
+    let hls: import('hls.js').default | undefined;
+    const waitFor = (event: string) => new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => finish(false), 12000);
+      const done = () => finish(true);
+      const fail = () => finish(false);
+      function finish(ok: boolean) {
+        window.clearTimeout(timer);
+        video.removeEventListener(event, done);
+        video.removeEventListener('error', fail);
+        controller.signal.removeEventListener('abort', fail);
+        if (ok) resolve(); else reject(new Error('无法读取视频画面'));
+      }
+      video.addEventListener(event, done, { once: true });
+      video.addEventListener('error', fail, { once: true });
+      controller.signal.addEventListener('abort', fail, { once: true });
+    });
+    void (async () => {
+      const state = useAppStore.getState();
+      const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
+      if (!sources.length) return;
+      const result = await api.search(title, sources, state.yellowFilter, { signal: controller.signal });
+      const matches = result.list.filter((item) => item.name.trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase());
+      for (const match of matches) {
+        if (controller.signal.aborted) return;
+        const source = sources.find((entry) => entry.key === match.sourceKey);
+        if (!source) continue;
+        try {
+          const detail = await api.detail(match.vodId, source, controller.signal);
+          const url = detail.episodes[0];
+          if (!url || !/^https:\/\//i.test(url)) continue;
+          const isHls = /\.m3u8(?:[?#]|$)/i.test(url) && !video.canPlayType('application/vnd.apple.mpegurl');
+          const Hls = isHls ? (await import('hls.js')).default : undefined;
+          if (isHls && !Hls?.isSupported()) continue;
+          const metadata = waitFor('loadedmetadata');
+          if (Hls) {
+            hls = new Hls({ enableWorker: true, maxBufferLength: 10 });
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              const best = hls?.levels.reduce((winner, level, i, levels) => (level.height || 0) > (levels[winner]?.height || 0) ? i : winner, 0);
+              if (hls && best !== undefined) hls.currentLevel = best;
+            });
+            hls.loadSource(url);
+            hls.attachMedia(video);
+          } else video.src = url;
+          await metadata;
+          if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error('视频时长未知');
+          const images: string[] = [];
+          for (const fraction of [0.2, 0.5, 0.8]) {
+            const seeked = waitFor('seeked');
+            video.currentTime = video.duration * fraction;
+            await seeked;
+            if (video.videoWidth < 1280 || video.videoHeight < 720) throw new Error('视频分辨率不足');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d')?.drawImage(video, 0, 0);
+            images.push(canvas.toDataURL('image/jpeg', 0.8));
+          }
+          if (!controller.signal.aborted) setFrames(images);
+          return;
+        } catch { hls?.destroy(); hls = undefined; video.removeAttribute('src'); video.load(); }
+      }
+    })().catch(() => {});
+    return () => { controller.abort(); hls?.destroy(); video.removeAttribute('src'); video.load(); };
+  }, [title, verified, sourceKeys]);
+  return frames;
 }
 
 function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () => void }) {
@@ -146,17 +228,17 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   useEffect(() => setStillIndex(0), [item.id]);
   const a = abs.data;
   const stills = a?.stills ?? [];
+  const frames = useVideoFrames(item.title);
   useEffect(() => {
-    if (stills.length < 2) return;
-    const timer = window.setTimeout(() => setStillIndex((index) => (index + 1) % stills.length), 8000);
+    if (frames.length < 2) return;
+    const timer = window.setTimeout(() => setStillIndex((index) => (index + 1) % frames.length), 8000);
     return () => window.clearTimeout(timer);
-  }, [stillIndex, stills.length]);
-  const still = stills[stillIndex];
+  }, [stillIndex, frames.length]);
   const meta = [item.isTv || a?.episodes ? '剧集' : '电影', a?.types?.join(' / '), a?.year, a?.region, a?.episodes ? `${a.episodes} 集` : a?.duration].filter(Boolean).join(' · ');
   const rating = a?.rate || item.rating;
   return (
     <article>
-      <DetailHero image={still || item.cover} fallback={!still} onBack={onBack} stills={stills} stillIndex={stillIndex} onSelectStill={setStillIndex}>
+      <DetailHero image={item.cover} fallback={!frames.length} onBack={onBack} stills={frames} stillIndex={stillIndex} onSelectStill={setStillIndex}>
         <div className="max-w-[660px]">
           {tmdb.data?.logo && !logoFailed ? (
             <h1>
@@ -182,7 +264,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         <section aria-label="预告片"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">预告片</h2>{extras.isLoading ? <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">正在获取预告片…</p> : extras.data?.trailers?.length ? <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{extras.data.trailers.map((trailer) => <button key={trailer.id} type="button" onClick={() => setTrailer({ id: trailer.id, title: trailer.title })} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] text-left snap-start group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"><div className="relative aspect-video overflow-hidden rounded-2xl bg-chip"><Cover url={trailer.cover} alt="" className="w-full h-full object-cover" /><span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><span className="absolute inset-0 flex items-center justify-center"><span className="glass glass-clear glass-dark rounded-full p-3"><Icon name="play" className="w-5 h-5" /></span></span>{trailer.runtime && <span className="absolute right-3 bottom-3 text-xs text-white">{trailer.runtime}</span>}</div><span className="block mt-2 text-sm font-medium text-content line-clamp-2">{trailer.title}</span></button>)}</div> : <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">暂无预告片</p>}</section>
         {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
-        {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" onClick={() => { setStillIndex(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={`查看第 ${i + 1} 张剧照`} aria-pressed={i === stillIndex} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></button>)}</div></section>}
+        {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <div key={`${url}-${i}`} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></div>)}</div></section>}
         {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
         {(a?.intro || a?.comment) && <section className="px-4 sm:px-8 lg:px-12 max-w-4xl"><h2 className="text-xl sm:text-2xl font-bold mb-4">简介</h2>{a.intro && <p className="text-muted leading-relaxed whitespace-pre-wrap">{a.intro}</p>}{a.comment && <blockquote className="mt-4 text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>}</section>}
         {!!extras.data?.items.length && <Row title="相关推荐">{extras.data.items.map((recommendation) => <PosterCard key={recommendation.id} item={recommendation} className={POSTER_W} showTitle onOpen={(picked) => router.push(buildRecommendationDetailUrl(picked, window.location.pathname + window.location.search))} />)}</Row>}
@@ -220,6 +302,14 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
   const { toast } = useToast();
   const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
   const [reversed, setReversed] = useState(false);
+  const frames = useVideoFrames(title);
+  const [frameIndex, setFrameIndex] = useState(0);
+  useEffect(() => setFrameIndex(0), [title]);
+  useEffect(() => {
+    if (frames.length < 2) return;
+    const timer = window.setTimeout(() => setFrameIndex((index) => (index + 1) % frames.length), 8000);
+    return () => window.clearTimeout(timer);
+  }, [frameIndex, frames.length]);
   const [alternatives, setAlternatives] = useState<SearchResultItem[]>([]);
   const params = useSearchParams();
   const [playingSource, setPlayingSource] = useState(false);
@@ -295,7 +385,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
   const description = info?.desc?.replace(/<[^>]*>/g, '').trim();
   return (
     <article>
-      <DetailHero image={cover || info?.cover} fallback onBack={onBack}>
+      <DetailHero image={cover || info?.cover} fallback={!frames.length} onBack={onBack} stills={frames} stillIndex={frameIndex} onSelectStill={setFrameIndex}>
         <div className="max-w-[660px]">
           <h1 className="hero-title text-4xl sm:text-5xl lg:text-[56px] font-black leading-tight break-words">{title}</h1>
           <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>
