@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       return res.ok ? await res.json() : null;
     } catch { return null; }
   };
-  const [credits, recommendations] = await Promise.all([get('celebrities'), get('recommendations')]);
+  const [credits, recommendations, trailerData] = await Promise.all([get('celebrities'), get('recommendations'), get('trailers')]);
   const people: { name: string; role: string; photo?: string }[] = [];
   for (const [key, role] of [['directors', '导演'], ['actors', '演员']] as const) {
     if (!Array.isArray(credits?.[key])) continue;
@@ -36,7 +36,11 @@ export async function GET(req: Request) {
     if (typeof x.id !== 'string' || !/^\d+$/.test(x.id) || x.id === id || typeof x.title !== 'string' || typeof cover !== 'string' || !/^https:\/\//.test(cover)) return [];
     return [{ id: x.id, title: x.title, cover, rating: typeof x.rating?.value === 'number' && x.rating.value > 0 ? x.rating.value.toFixed(1) : undefined, isTv: x.type === 'tv' }];
   });
-  const result = { people, items };
-  if (credits || recommendations) setCache(key, result, 60 * 60 * 1000);
+  const trailers = (Array.isArray(trailerData?.trailers) ? trailerData.trailers : []).slice(0, 30).flatMap((x: { id?: unknown; title?: unknown; type_name?: unknown; cover_url?: unknown; runtime?: unknown }) => {
+    if (x.type_name !== '预告片' || typeof x.id !== 'string' || !/^\d+$/.test(x.id) || typeof x.title !== 'string' || typeof x.cover_url !== 'string' || !/^https:\/\/img\d*\.doubanio\.com\//.test(x.cover_url)) return [];
+    return [{ id: x.id, title: x.title, cover: x.cover_url, runtime: typeof x.runtime === 'string' ? x.runtime : undefined }];
+  });
+  const result = { people, items, trailers };
+  if (credits || recommendations || trailerData) setCache(key, result, 60 * 60 * 1000);
   return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=3600' } });
 }
