@@ -2,15 +2,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
-import type { DoubanItem } from '@/lib/types';
+import type { DoubanAbstract, DoubanItem } from '@/lib/types';
 import { SmartImage } from './smart-image';
 import { Icon } from './icon';
 import { useInView } from './use-in-view';
-import { useAbstract } from './home-hero';
 
 /* ------------------------------------------------------------------ */
 /* 数据 hooks                                                          */
@@ -478,8 +477,9 @@ export function CategoryRow({ title, categories }: { title: string; categories: 
 function CategoryTile({ c, visible }: { c: Category; visible: boolean }) {
   const list = useDoubanList(c.type, c.tag, visible);
   const first = list.data?.[0];
-  const abs = useAbstract(visible ? first : null);
-  const still = abs.data?.stills?.[0];
+  // 只读缓存里已有的剧照（Hero / 预览拉过的），不为磁贴单独请求，避免触发豆瓣限流
+  const cached = useQueryClient().getQueryData<DoubanAbstract>(['douban-abstract', first?.id ?? '']);
+  const still = cached?.stills?.[0];
   return (
     <Link
       href={`/?browse=${c.type}&tag=${encodeURIComponent(c.tag)}`}
@@ -489,7 +489,7 @@ function CategoryTile({ c, visible }: { c: Category; visible: boolean }) {
         {still ? (
           <Cover url={still} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : first ? (
-          <Cover url={first.cover} alt="" className="absolute inset-0 w-full h-full object-cover object-[center_25%] scale-110 blur-[2px]" />
+          <Cover url={first.cover} alt="" large className="absolute inset-0 w-full h-full object-cover object-[center_30%]" />
         ) : null}
         <div className={cn('absolute inset-0 bg-gradient-to-tr via-transparent to-transparent', c.tint)} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />

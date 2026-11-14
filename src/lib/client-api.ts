@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, DoubanAbstract, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, QualityProbeItem, QualityProbeResult } from './types';
+import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, DoubanAbstract, DoubanItem, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, QualityProbeItem, QualityProbeResult } from './types';
 
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
@@ -200,6 +200,10 @@ export const api = {
     const sp = new URLSearchParams({ type, tag, pageStart: String(pageStart), pageSize: String(pageSize) });
     return request<DoubanResponse>(`/api/douban?${sp.toString()}`, { signal });
   },
+
+  /** 首页 Hero：有高清剧照的今日热门（服务端聚合） */
+  doubanHero: (type: 'movie' | 'tv', signal?: AbortSignal) =>
+    request<{ entries: { item: DoubanItem; abstract: DoubanAbstract }[] }>(`/api/douban/hero?type=${type}`, { signal }),
 
   /** 豆瓣条目摘要（首页 Hero） */
   doubanAbstract: (id: string, signal?: AbortSignal) =>

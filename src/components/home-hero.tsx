@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { cn } from '@/lib/utils';
 import type { DoubanAbstract, DoubanItem } from '@/lib/types';
@@ -49,23 +49,27 @@ function stars(rate?: string) {
  * 当前剧照同时作为整页的环境光背景，让下方的液态玻璃有内容可折射。
  */
 export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => void; onMore: (item: DoubanItem) => void }) {
-  const douban = useDoubanList('movie', '热门');
-  const fallback = useHotList('douban_movie_weekly', douban.isError);
-  const candidates = (douban.data?.length ? douban.data : fallback.data ?? []).slice(0, HERO_COUNT + 4);
-  // 只轮播「有高清横版剧照」的作品：先并行拉摘要（服务端缓存 6h），没有剧照的跳过
-  const abstracts = useQueries({
-    queries: candidates.map((item) => ({
-      queryKey: ['douban-abstract', item.id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => api.doubanAbstract(item.id, signal),
-      enabled: /^\d+$/.test(item.id),
-      staleTime: 60 * 60_000,
-      retry: false,
-    })),
+  const queryClient = useQueryClient();
+  const hero = useQuery({
+    queryKey: ['douban-hero', 'movie'],
+    queryFn: async ({ signal }) => {
+      const res = await api.doubanHero('movie', signal);
+      // 预填摘要缓存：每张 Slide / 预览弹窗直接复用，不再逐个请求
+      for (const e of res.entries) queryClient.setQueryData(['douban-abstract', e.item.id], e.abstract);
+      return res.entries.map((e) => e.item);
+    },
+    staleTime: 30 * 60_000,
+    retry: 1,
   });
-  const settled = abstracts.length > 0 && abstracts.every((q) => !q.isLoading);
-  const withStills = candidates.filter((_, i) => abstracts[i]?.data?.stills?.length).slice(0, HERO_COUNT);
-  // 全部摘要都失败（例如豆瓣限流）时才退回海报版式，保证 Hero 不为空
-  const items = withStills.length > 0 ? withStills : settled ? candidates.slice(0, HERO_COUNT) : [];
+  // 聚合接口失败或一部剧照都没有（豆瓣限流）时，才退回海报版式
+  const needFallback = hero.isError || (hero.isSuccess && hero.data.length === 0);
+  const douban = useDoubanList('movie', '热门', needFallback);
+  const fallback = useHotList('douban_movie_weekly', needFallback && douban.isError);
+  const items = hero.data?.length
+    ? hero.data
+    : needFallback
+      ? (douban.data?.length ? douban.data : fallback.data ?? []).slice(0, HERO_COUNT)
+      : [];
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
@@ -84,7 +88,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
   const go = (d: number) => count && setIndex((i) => (i + d + count) % count);
 
   if (!current) {
-    const failed = douban.isError && (fallback.isError || (!fallback.isLoading && !fallback.data?.length));
+    const failed = needFallback && douban.isError && (fallback.isError || (!fallback.isLoading && !fallback.data?.length));
     return (
       <div
         className={cn(

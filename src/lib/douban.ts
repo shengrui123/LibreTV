@@ -101,7 +101,10 @@ async function fetchRexxarStills(kind: string, id: string): Promise<string[]> {
         headers: { 'User-Agent': MOBILE_UA, Referer: 'https://m.douban.com/', Accept: 'application/json' },
       }
     );
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[douban] rexxar photos ${kind}/${id} -> ${res.status}`);
+      return [];
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = (await res.json()) as { photos?: any[] };
     const out: string[] = [];
@@ -122,11 +125,18 @@ async function fetchRexxarStills(kind: string, id: string): Promise<string[]> {
 async function fetchRexxarAbstract(id: string): Promise<DoubanAbstract | null> {
   for (const kind of ['movie', 'tv']) {
     try {
-      const res = await fetchUpstream(`https://m.douban.com/rexxar/api/v2/${kind}/${encodeURIComponent(id)}`, {
-        timeoutMs: 6000,
-        headers: { 'User-Agent': MOBILE_UA, Referer: 'https://m.douban.com/', Accept: 'application/json' },
-      });
-      if (!res.ok) continue;
+      // 详情与剧照并行请求，首屏 Hero 耗时减半
+      const [res, stillsPre] = await Promise.all([
+        fetchUpstream(`https://m.douban.com/rexxar/api/v2/${kind}/${encodeURIComponent(id)}`, {
+          timeoutMs: 6000,
+          headers: { 'User-Agent': MOBILE_UA, Referer: 'https://m.douban.com/', Accept: 'application/json' },
+        }),
+        fetchRexxarStills(kind, id),
+      ]);
+      if (!res.ok) {
+        console.warn(`[douban] rexxar ${kind}/${id} -> ${res.status}`);
+        continue;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const s = (await res.json()) as any;
       if (!s?.title) continue;
@@ -135,7 +145,7 @@ async function fetchRexxarAbstract(id: string): Promise<DoubanAbstract | null> {
         Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : x?.name)).filter(Boolean).slice(0, 6) : undefined;
       const rate = typeof s.rating?.value === 'number' && s.rating.value > 0 ? s.rating.value.toFixed(1) : undefined;
       const eps = Number(s.episodes_count) > 0 ? String(s.episodes_count) : undefined;
-      const stills = await fetchRexxarStills(kind, id);
+      const stills = stillsPre;
       return {
         stills,
         id,
@@ -205,4 +215,34 @@ export async function fetchDoubanAbstract(id: string): Promise<DoubanAbstract> {
     }
   }
   throw new Error('豆瓣摘要获取失败');
+}
+
+export interface HeroEntry {
+  item: DoubanItem;
+  abstract: DoubanAbstract;
+}
+
+/**
+ * 首页 Hero 数据：热门列表中「有高清横版剧照」的前 N 部。
+ * 服务端低并发逐个拉摘要（避免触发豆瓣限流），整体缓存 30 分钟。
+ */
+export async function fetchDoubanHero(type: 'movie' | 'tv', count = 8): Promise<HeroEntry[]> {
+  const cacheKey = `douban-hero:${type}:${count}`;
+  const cached = getCache<HeroEntry[]>(cacheKey);
+  if (cached) return cached;
+
+  const list = await fetchDoubanRecommend(type, '热门', 0, 24);
+  const out: HeroEntry[] = [];
+  const queue = list.slice(0, count + 4);
+  const CONCURRENCY = 4;
+  for (let i = 0; i < queue.length && out.length < count; i += CONCURRENCY) {
+    const batch = queue.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((item) => fetchDoubanAbstract(item.id).then((a) => ({ item, abstract: a })).catch(() => null))
+    );
+    for (const r of results) if (r?.abstract.stills?.length && out.length < count) out.push(r);
+  }
+  // 一部剧照都没拿到（被限流）时不写长缓存，下次请求再试
+  setCache(cacheKey, out, out.length ? 30 * 60 * 1000 : 60 * 1000);
+  return out;
 }
