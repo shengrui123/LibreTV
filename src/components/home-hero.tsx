@@ -136,6 +136,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
             key={item.id}
             item={item}
             active={i === index}
+            position={i === index ? 0 : (i - index + count) % count <= count / 2 ? 1 : -1}
             preload={i === (index + 1) % count}
             rank={i + 1}
             onPlay={onPlay}
@@ -143,40 +144,24 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
           />
         ))}
 
-        {/* 指示点（玻璃胶囊） */}
-        <div className="absolute z-20 bottom-[40px] left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-[92px] md:right-8 lg:right-12 glass glass-clear glass-dark rounded-full px-2.5 py-2 flex items-center gap-1.5">
+        {/* 透明背景的轮播指示点 */}
+        <div className="absolute z-20 bottom-[40px] left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-[92px] md:right-8 lg:right-12 flex items-center gap-1">
           {items.map((item, i) => (
             <button
               key={item.id}
               aria-label={`第 ${i + 1} 部：${item.title}`}
               aria-current={i === index}
               onClick={() => setIndex(i)}
-              className={cn(
-                'h-1.5 rounded-full transition-all duration-500',
-                i === index ? 'w-5 bg-white' : 'w-1.5 bg-white/45 hover:bg-white/75'
-              )}
-            />
+              className="group grid h-8 min-w-5 place-items-center"
+            >
+              <span className={cn(
+                'h-1.5 rounded-full transition-all duration-500 motion-reduce:transition-none',
+                i === index ? 'w-5 bg-white' : 'w-1.5 bg-white/45 group-hover:bg-white/75'
+              )} />
+            </button>
           ))}
         </div>
 
-        {count > 1 && (
-          <>
-            <button
-              aria-label="上一部"
-              onClick={() => go(-1)}
-              className="btn-icon-glass hidden md:inline-grid absolute z-20 left-4 top-1/2 -translate-y-1/2"
-            >
-              <Icon name="chevronLeft" />
-            </button>
-            <button
-              aria-label="下一部"
-              onClick={() => go(1)}
-              className="btn-icon-glass hidden md:inline-grid absolute z-20 right-4 top-1/2 -translate-y-1/2"
-            >
-              <Icon name="chevronRight" />
-            </button>
-          </>
-        )}
       </section>
     </>
   );
@@ -185,6 +170,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
 function HeroSlide({
   item,
   active,
+  position,
   preload,
   rank,
   onPlay,
@@ -192,6 +178,7 @@ function HeroSlide({
 }: {
   item: DoubanItem;
   active: boolean;
+  position: number;
   preload: boolean;
   rank: number;
   onPlay: (item: DoubanItem) => void;
@@ -225,7 +212,11 @@ function HeroSlide({
   return (
     <div
       aria-hidden={!active}
-      className={cn('absolute inset-0 transition-opacity duration-1000', active ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none')}
+      inert={!active}
+      className={cn(
+        'absolute inset-0 transition-[opacity,transform] duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+        active ? 'opacity-100 translate-x-0 z-10' : cn('opacity-0 z-0 pointer-events-none', position < 0 ? '-translate-x-[8%]' : 'translate-x-[8%]')
+      )}
     >
       {seen && still && (
         <div className="absolute inset-0 overflow-hidden">
@@ -234,7 +225,7 @@ function HeroSlide({
             alt={item.title}
             eager={rank === 1}
             className={cn(
-              'w-full h-full object-cover object-center transition-transform duration-[9000ms] ease-out',
+              'w-full h-full object-cover object-center transition-transform duration-[9000ms] ease-out motion-reduce:transition-none',
               active ? 'scale-[1.06]' : 'scale-100'
             )}
           />
@@ -280,11 +271,11 @@ function HeroSlide({
       <div className="absolute inset-x-0 bottom-0 z-10 px-4 sm:px-8 lg:px-12 pb-[76px] md:pb-20">
         <div
           className={cn(
-            'max-w-[560px] transition-all duration-700 delay-150',
+            'max-w-[560px] transition-all duration-700 delay-150 motion-reduce:transition-none',
             active ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
           )}
         >
-          <div className="glass glass-clear glass-dark inline-flex items-center gap-1.5 mb-3 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white">
+          <div className="inline-flex items-center gap-1.5 mb-3 text-[11px] font-semibold text-white">
             <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">豆瓣</span>
             今日热门 · 第 {rank} 名
           </div>
