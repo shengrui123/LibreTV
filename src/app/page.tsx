@@ -1,16 +1,17 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
-import { HomeHero, PreviewModal } from '@/components/home-hero';
+import { HomeHero } from '@/components/home-hero';
+import { buildRecommendationDetailUrl, buildSourceDetailUrl } from '@/lib/detail-url';
 import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, MOVIE_CATEGORIES, TV_CATEGORIES, useDoubanList } from '@/components/home-rows';
 import { AggregatedCard, aggregateResults } from '@/components/video-card';
 import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled } from '@/lib/store';
 import { api } from '@/lib/client-api';
-import type { DoubanItem, SearchResultItem, SourceSearchOutcome } from '@/lib/types';
+import type { DoubanItem, SourceSearchOutcome } from '@/lib/types';
 import { SearchHistoryDropdown, useSearchHistory } from '@/components/search-history';
 import { cn, formatDisableTtl, validateSourceUrl } from '@/lib/utils';
 import { useToast } from '@/components/toast';
@@ -26,7 +27,6 @@ const RESULT_PAGE_SIZE = 60;
 
 // 首页首屏不需要频道网格和搜索详情，将它们留到用户打开时再加载。
 const DoubanView = dynamic(() => import('@/components/douban-section').then((mod) => mod.DoubanView));
-const DetailModal = dynamic(() => import('@/components/detail-modal').then((mod) => mod.DetailModal));
 
 export default function HomePage() {
   return (
@@ -51,9 +51,6 @@ function HomeContent() {
   const subscriptions = useAppStore((s) => s.subscriptions);
   const [input, setInput] = useState(urlQuery);
   const doubanEnabled = useAppStore((s) => s.doubanEnabled);
-  const [detailItem, setDetailItem] = useState<SearchResultItem | null>(null);
-  const [previewItem, setPreviewItem] = useState<DoubanItem | null>(null);
-  const closePreview = useCallback(() => setPreviewItem(null), []);
   /** 流式搜索中已结算的源（data 就绪前用于增量渲染） */
   const [streamedOutcomes, setStreamedOutcomes] = useState<SourceSearchOutcome[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -175,9 +172,8 @@ function HomeContent() {
   const browseTag = searchParams.get('tag') || '热门';
   const searchMode = Boolean(urlQuery) || searchParams.get('search') === '1' || !doubanEnabled;
 
-  const openPreview = (item: DoubanItem) => setPreviewItem(item);
+  const openPreview = (item: DoubanItem) => router.push(buildRecommendationDetailUrl(item, window.location.pathname + window.location.search));
   const playItem = (item: DoubanItem) => {
-    setPreviewItem(null);
     setInput(item.title);
     runSearch(item.title);
   };
@@ -209,7 +205,6 @@ function HomeContent() {
           <DoubanRow title="冷门佳片" type="movie" tag="冷门佳片" href="/?browse=movie&tag=%E5%86%B7%E9%97%A8%E4%BD%B3%E7%89%87" onOpen={openPreview} />
           <DoubanRow title="纪录片" type="tv" tag="纪录片" href="/?browse=tv&tag=%E7%BA%AA%E5%BD%95%E7%89%87" onOpen={openPreview} />
         </main>
-        <PreviewModal item={previewItem} onClose={closePreview} onPlay={playItem} />
       </div>
     );
   }
@@ -225,7 +220,6 @@ function HomeContent() {
           </h1>
           <DoubanView key={browseType} fixedType={browseType} initialTag={browseTag} onPick={openPreview} />
         </main>
-        <PreviewModal item={previewItem} onClose={closePreview} onPlay={playItem} />
       </div>
     );
   }
@@ -387,7 +381,7 @@ function HomeContent() {
                       key={group.key}
                       group={group}
                       sources={selectedSources}
-                      onOpen={(item) => setDetailItem(item)}
+                      onOpen={(item) => router.push(buildSourceDetailUrl(item, window.location.pathname + window.location.search))}
                     />
                   ))}
                 </div>
@@ -417,7 +411,6 @@ function HomeContent() {
 
       </main>
 
-      {detailItem && <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />}
     </div>
   );
 }
