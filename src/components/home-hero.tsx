@@ -302,7 +302,7 @@ function HeroSlide({
               <img src={tmdb.data.logo} alt={item.title} className="max-w-full max-h-24 sm:max-h-32 object-contain object-left" onError={() => setLogoFailed(true)} />
             </h2>
           ) : (
-            <h2 className="hero-title font-black tracking-tight leading-[1.05] text-[40px] sm:text-6xl lg:text-7xl line-clamp-2 pb-1">{item.title}</h2>
+            <h2 className="hero-title font-black tracking-tight leading-[1.05] text-[36px] sm:text-5xl lg:text-[56px] line-clamp-2 pb-1">{item.title}</h2>
           )}
           <p className="mt-2 text-[13px] sm:text-sm font-medium text-white/85">{metaLine(item, a)}</p>
           {a?.intro ? (
