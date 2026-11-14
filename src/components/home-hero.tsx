@@ -9,6 +9,7 @@ import { Cover, useDoubanList, useHotList } from './home-rows';
 import { Icon } from './icon';
 import { useFocusTrap } from './use-focus-trap';
 import { useToast } from './toast';
+import { useTmdbHero } from './use-tmdb-hero';
 
 const HERO_COUNT = 8;
 const HERO_INTERVAL = 8000;
@@ -73,6 +74,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
+  const timing = useRef({ index: 0, remaining: HERO_INTERVAL });
 
   const count = items.length;
   const current = items[index % Math.max(count, 1)];
@@ -80,9 +82,14 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
   const ambientStill = currentAbs.data?.stills?.[0];
 
   useEffect(() => {
+    if (timing.current.index !== index) timing.current = { index, remaining: HERO_INTERVAL };
     if (count < 2 || paused) return;
-    const t = setTimeout(() => setIndex((i) => (i + 1) % count), HERO_INTERVAL);
-    return () => clearTimeout(t);
+    const started = performance.now();
+    const t = setTimeout(() => setIndex((i) => (i + 1) % count), timing.current.remaining);
+    return () => {
+      clearTimeout(t);
+      timing.current.remaining = Math.max(0, timing.current.remaining - (performance.now() - started));
+    };
   }, [index, count, paused]);
 
   const go = (d: number) => count && setIndex((i) => (i + d + count) % count);
@@ -155,9 +162,15 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
               className="group grid h-8 min-w-5 place-items-center"
             >
               <span className={cn(
-                'h-1.5 rounded-full transition-all duration-500 motion-reduce:transition-none',
-                i === index ? 'w-5 bg-white' : 'w-1.5 bg-white/45 group-hover:bg-white/75'
-              )} />
+                'relative overflow-hidden rounded-full transition-[width,height] duration-500 motion-reduce:transition-none bg-white/45',
+                i === index ? 'h-1.5 w-6' : cn('group-hover:bg-white/75', count > 6 && i === count - 1 ? 'h-0.5 w-0.5' : count > 6 && i === count - 2 ? 'h-1 w-1' : 'h-1.5 w-1.5')
+              )}>
+                {i === index && <span
+                  key={index}
+                  className="hero-progress absolute inset-0 rounded-full bg-white origin-left motion-reduce:animate-none motion-reduce:scale-x-100"
+                  style={{ animationDuration: `${HERO_INTERVAL}ms`, animationPlayState: paused ? 'paused' : 'running' }}
+                />}
+              </span>
             </button>
           ))}
         </div>
@@ -191,6 +204,9 @@ function HeroSlide({
   }, [active, preload]);
   const abs = useAbstract(seen ? item : null);
   const a = abs.data;
+  const tmdb = useTmdbHero(item.id, active || preload);
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => setLogoFailed(false), [tmdb.data?.logo]);
   const still = a?.stills?.[0];
   // 摘要请求结束仍无剧照 → 海报回退版式
   const posterMode = !still && !abs.isLoading;
@@ -279,9 +295,15 @@ function HeroSlide({
             <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">豆瓣</span>
             今日热门 · 第 {rank} 名
           </div>
-          <h2 className="hero-title font-black tracking-tight leading-[1.05] text-[40px] sm:text-6xl lg:text-7xl line-clamp-2 pb-1">
-            {item.title}
-          </h2>
+          {tmdb.data?.logo && !logoFailed ? (
+            <h2 className="mb-1">
+              {/* TMDB supplies the film's own transparent promotional title artwork. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={tmdb.data.logo} alt={item.title} className="max-w-full max-h-24 sm:max-h-32 object-contain object-left" onError={() => setLogoFailed(true)} />
+            </h2>
+          ) : (
+            <h2 className="hero-title font-black tracking-tight leading-[1.05] text-[40px] sm:text-6xl lg:text-7xl line-clamp-2 pb-1">{item.title}</h2>
+          )}
           <p className="mt-2 text-[13px] sm:text-sm font-medium text-white/85">{metaLine(item, a)}</p>
           {a?.intro ? (
             <p className="mt-1.5 text-[13px] sm:text-[15px] text-white/75 leading-relaxed line-clamp-2">{a.intro}</p>
@@ -295,8 +317,7 @@ function HeroSlide({
                 <span className="text-[#ffcc00] tracking-tight">{stars(rate)}</span>
               </span>
             )}
-            {a?.directors?.[0] && <span>导演 {a.directors[0]}</span>}
-            {a?.actors?.length ? <span className="truncate max-w-[60%]">主演 {a.actors.slice(0, 3).join(' / ')}</span> : null}
+            {tmdb.data?.score && <span className="font-semibold text-white">TMDB {tmdb.data.score}</span>}
           </div>
           <div className="mt-5 flex items-center gap-2.5">
             <button

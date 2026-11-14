@@ -223,14 +223,6 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
             <Link href="/?search=1" aria-label="搜索" className={cn('sm:hidden glass glass-clear w-10 h-10 rounded-full grid place-items-center', onImage && 'glass-dark')}>
               <Icon name="search" className="w-[18px] h-[18px]" />
             </Link>
-            <div className="hidden sm:block">
-              <GlassCircle label="观看历史" dark={onImage} onClick={() => setHistoryOpen(true)}>
-                <Icon name="clock" className="w-[18px] h-[18px]" />
-              </GlassCircle>
-            </div>
-            <GlassCircle label="设置" dark={onImage} onClick={() => setSettingsOpen(true)}>
-              <Icon name="gear" className="w-[18px] h-[18px]" />
-            </GlassCircle>
           </div>
         </div>
       </header>
@@ -271,6 +263,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
           </nav>
           <div className="my-3 mx-2 h-px bg-line" />
           <div className="flex flex-col gap-0.5">
+            <span className="px-3 pb-1 text-xs font-medium text-muted">更多</span>
             <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setHistoryOpen(true); }}>观看历史</SideAction>
             <SideAction icon="download" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); requestShowDownloadManager(); }}>下载管理</SideAction>
             <SideAction icon="gear" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setSettingsOpen(true); }}>设置</SideAction>

@@ -400,3 +400,10 @@ body {
   -webkit-mask-image: linear-gradient(to bottom, transparent 45%, black 85%);
   mask-image: linear-gradient(to bottom, transparent 45%, black 85%);
 }
+
+/* The active carousel marker fills as the current slide plays. */
+@keyframes hero-progress-fill {
+  from { transform: scaleX(.25); }
+  to { transform: scaleX(1); }
+}
+.hero-progress { animation: hero-progress-fill linear both; }

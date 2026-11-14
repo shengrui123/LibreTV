@@ -37,6 +37,15 @@ export default function AboutPage() {
         </section>
 
         <section>
+          <h2 className="text-base font-semibold text-content mb-2.5">数据来源</h2>
+          <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDB" className="w-16 h-16 object-contain mb-2" />
+          </a>
+          <p className="text-sm text-muted">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+        </section>
+
+        <section>
           <h2 className="text-base font-semibold text-content mb-2.5">免责声明</h2>
           <p className="text-sm text-faint leading-relaxed">
             本项目不存储、不制作任何视频内容，仅提供第三方公开接口的聚合与播放能力。
