@@ -108,14 +108,16 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
             <Cover
               url={ambientStill || current.cover}
               alt=""
-              className="w-full h-full object-cover blur-[90px] saturate-[1.6] opacity-60 dark:opacity-45"
+              className="w-full h-full object-cover blur-[90px] saturate-[1.8] opacity-70 dark:opacity-45"
             />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-page/40 to-page/80" />
+        {/* 亮色：白色薄纱让环境光变成浅色彩调；暗色：逐渐压暗 */}
+        <div className="absolute inset-0 bg-white/55 dark:bg-transparent dark:bg-gradient-to-b dark:from-transparent dark:via-page/40 dark:to-page/80" />
       </div>
 
       <section
+        data-hero
         aria-roledescription="carousel"
         aria-label="今日热门"
         className="relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] min-h-[440px] overflow-hidden"
@@ -142,7 +144,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
         ))}
 
         {/* 指示点（玻璃胶囊） */}
-        <div className="absolute z-20 bottom-[40px] left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-[92px] md:right-8 lg:right-12 glass glass-clear rounded-full px-2.5 py-2 flex items-center gap-1.5">
+        <div className="absolute z-20 bottom-[40px] left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-[92px] md:right-8 lg:right-12 glass glass-clear glass-dark rounded-full px-2.5 py-2 flex items-center gap-1.5">
           {items.map((item, i) => (
             <button
               key={item.id}
@@ -249,9 +251,29 @@ function HeroSlide({
         </>
       )}
 
-      {/* 压暗：底部融入页面、左侧保证文字可读 */}
-      <div className="absolute inset-0 bg-gradient-to-t from-page via-page/25 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/15 to-transparent" />
+      {/* 底部渐进模糊（同一张剧照），再淡入页面环境光：亮暗主题都连贯 */}
+      {seen && still && (
+        <div className="absolute inset-0 overflow-hidden progressive-blur" aria-hidden>
+          <Cover url={still} alt="" className="w-full h-full object-cover scale-110 blur-2xl saturate-150" />
+        </div>
+      )}
+      {/* 文字区压暗（始终深色，白字可读） */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(to top, rgb(0 0 0 / 0) 0%, rgb(0 0 0 / .55) 16%, rgb(0 0 0 / .5) 34%, rgb(0 0 0 / .18) 62%, rgb(0 0 0 / 0) 85%)',
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/10 to-transparent" />
+      {/* 最底部一小段淡入页面背景，与下方内容衔接 */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-24 md:h-36"
+        style={{
+          background:
+            'linear-gradient(to top, rgb(var(--c-page)) 0%, rgb(var(--c-page) / .75) 30%, rgb(var(--c-page) / .3) 65%, rgb(var(--c-page) / 0) 100%)',
+        }}
+      />
       <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/45 to-transparent" />
 
       {/* 信息区 */}
@@ -262,7 +284,7 @@ function HeroSlide({
             active ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
           )}
         >
-          <div className="glass glass-clear inline-flex items-center gap-1.5 mb-3 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white">
+          <div className="glass glass-clear glass-dark inline-flex items-center gap-1.5 mb-3 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white">
             <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">豆瓣</span>
             今日热门 · 第 {rank} 名
           </div>

@@ -36,6 +36,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(showSearch);
   const [scrolled, setScrolled] = useState(false);
+  const [overHero, setOverHero] = useState(transparent);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const searchHistory = useSearchHistory(query);
@@ -56,7 +57,12 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
               : 'home';
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 24);
+      const hero = document.querySelector<HTMLElement>('[data-hero]');
+      // Hero 尚未渲染（数据加载中）时，按「靠近顶部」处理
+      setOverHero(window.scrollY < (hero ? hero.offsetHeight - 120 : 200));
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -98,7 +104,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
   };
 
   // 叠在 Hero 上且未滚动时：图标用白色；其余情况随主题
-  const onImage = transparent && !scrolled;
+  const onImage = transparent && overHero;
 
   return (
     <>
@@ -108,7 +114,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
           aria-hidden
           className={cn(
             'absolute inset-x-0 top-0 h-24 transition-opacity duration-300 bg-gradient-to-b from-page/80 via-page/40 to-transparent',
-            scrolled || !transparent ? 'opacity-100' : 'opacity-0'
+            !onImage && (scrolled || !transparent) ? 'opacity-100' : 'opacity-0'
           )}
         />
         <div
@@ -118,7 +124,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
           )}
         >
           <div className="pointer-events-auto flex items-center gap-2.5">
-            <GlassCircle label="打开侧边栏" onClick={() => setSidebarOpen(true)}>
+            <GlassCircle label="打开侧边栏" dark={onImage} onClick={() => setSidebarOpen(true)}>
               <SidebarIcon />
             </GlassCircle>
             <Link href="/" aria-label="LibreTV 首页" className="hidden sm:flex items-center gap-1.5">
@@ -127,18 +133,6 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
               </span>
             </Link>
           </div>
-
-          {/* 宽屏：居中的玻璃胶囊导航 */}
-          <nav
-            aria-label="主导航"
-            className="pointer-events-auto hidden lg:flex absolute left-1/2 -translate-x-1/2 glass glass-clear rounded-full p-1 gap-0.5"
-          >
-            <NavPill href="/" active={active === 'home'}>首页</NavPill>
-            <NavPill href="/?browse=movie" active={active === 'movie'}>电影</NavPill>
-            <NavPill href="/?browse=tv" active={active === 'tv'}>剧集</NavPill>
-            <NavPill href="/live" active={active === 'live'}>直播</NavPill>
-            <NavPill href="/about" active={active === 'about'}>关于</NavPill>
-          </nav>
 
           <div className="flex-1" />
 
@@ -155,6 +149,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
                 <div
                   className={cn(
                     'glass glass-clear flex items-center h-10 rounded-full transition-[width] duration-300 overflow-hidden',
+                    onImage && 'glass-dark',
                     searchOpen ? 'w-60 lg:w-72' : 'w-10'
                   )}
                 >
@@ -222,15 +217,15 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
                 )}
               </div>
             </form>
-            <Link href="/?search=1" aria-label="搜索" className="sm:hidden glass glass-clear w-10 h-10 rounded-full grid place-items-center">
+            <Link href="/?search=1" aria-label="搜索" className={cn('sm:hidden glass glass-clear w-10 h-10 rounded-full grid place-items-center', onImage && 'glass-dark')}>
               <Icon name="search" className="w-[18px] h-[18px]" />
             </Link>
             <div className="hidden sm:block">
-              <GlassCircle label="观看历史" onClick={() => setHistoryOpen(true)}>
+              <GlassCircle label="观看历史" dark={onImage} onClick={() => setHistoryOpen(true)}>
                 <Icon name="clock" className="w-[18px] h-[18px]" />
               </GlassCircle>
             </div>
-            <GlassCircle label="设置" onClick={() => setSettingsOpen(true)}>
+            <GlassCircle label="设置" dark={onImage} onClick={() => setSettingsOpen(true)}>
               <Icon name="gear" className="w-[18px] h-[18px]" />
             </GlassCircle>
           </div>
@@ -321,31 +316,31 @@ function SidebarIcon() {
   );
 }
 
-function GlassCircle({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function GlassCircle({
+  label,
+  onClick,
+  dark,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  /** 叠在图片上时用深色玻璃 */
+  dark?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       onClick={onClick}
-      className="glass glass-clear w-10 h-10 rounded-full grid place-items-center transition-transform hover:scale-105 active:scale-95"
-    >
-      {children}
-    </button>
-  );
-}
-
-function NavPill({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
       className={cn(
-        'px-4 py-1.5 rounded-full text-[14px] font-semibold transition-all',
-        active ? 'glass-pill-active' : 'opacity-75 hover:opacity-100'
+        'glass glass-clear w-10 h-10 rounded-full grid place-items-center transition-transform hover:scale-105 active:scale-95',
+        dark && 'glass-dark'
       )}
     >
       {children}
-    </Link>
+    </button>
   );
 }
 
