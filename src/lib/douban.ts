@@ -158,6 +158,13 @@ async function fetchRexxarAbstract(id: string): Promise<DoubanAbstract | null> {
         episodes: eps,
         directors: names(s.directors),
         actors: names(s.actors),
+        people: ([...((Array.isArray(s.directors) ? s.directors : []).map((x: unknown) => ({ person: x, role: '导演' as const }))), ...((Array.isArray(s.actors) ? s.actors : []).map((x: unknown) => ({ person: x, role: '演员' as const })))] as { person: unknown; role: '导演' | '演员' }[]).flatMap(({ person, role }) => {
+          if (!person || typeof person !== 'object') return [];
+          const p = person as { name?: unknown; avatar?: { large?: unknown; normal?: unknown } };
+          const name = str(p.name);
+          const photo = str(p.avatar?.large) || str(p.avatar?.normal);
+          return name ? [{ name, role, photo: photo && /^https:\/\//.test(photo) ? photo : undefined }] : [];
+        }).slice(0, 12),
         intro: str(s.intro)?.replace(/\s+/g, ' '),
       };
     } catch {

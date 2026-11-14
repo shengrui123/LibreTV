@@ -1,19 +1,17 @@
 'use client';
 
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Header } from '@/components/header';
 import { Cover } from '@/components/home-rows';
 import { useAbstract } from '@/components/home-hero';
 import { useTmdbHero } from '@/components/use-tmdb-hero';
 import { Icon } from '@/components/icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { useAuth } from '@/components/auth';
-import { useAppStore, resolveSource } from '@/lib/store';
+import { useAppStore, resolveSource, isSourceDisabled, isInDisabledSubscription } from '@/lib/store';
 import { api } from '@/lib/client-api';
-import { buildWatchUrl } from '@/lib/utils';
+import { buildWatchUrl, validateSourceUrl } from '@/lib/utils';
 import { formatRemarks } from '@/lib/remarks';
 import { addSearchHistory } from '@/lib/db';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -42,7 +40,6 @@ function DetailContent() {
   };
   return (
     <div className="min-h-screen bg-page text-content">
-      <Header transparent />
       <main className="pb-24">
         {!valid ? <div className="pt-28 px-6"><button onClick={back} className="btn-ghost btn-sm mb-6"><Icon name="chevronLeft" className="w-4 h-4" /> 返回</button><EmptyState icon="alert" title="详情链接不完整" description="请返回首页重新选择影片" /></div> : isSource ? (
           <SourceDetail id={id} title={title} cover={cover} sourceKey={sourceKey} sourceUrl={sourceUrl} sourceName={sourceName} onBack={back} />
@@ -62,7 +59,7 @@ function DetailHero({ image, fallback, onBack, children }: { image?: string; fal
       <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/35 to-black/10" />
       <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/25" />
       {fallback && image && <div aria-hidden className="absolute right-4 sm:right-8 lg:right-12 top-32 w-24 sm:w-44 lg:w-52 aspect-[2/3] overflow-hidden rounded-2xl shadow-2xl opacity-90"><Cover url={image} alt="" eager className="w-full h-full object-cover" /></div>}
-      <button onClick={onBack} aria-label="返回上一页" className="btn-icon-glass absolute top-20 left-4 sm:left-8 lg:left-12 z-20"><Icon name="chevronLeft" className="w-5 h-5" /></button>
+      <button onClick={onBack} aria-label="返回上一页" className="btn-icon-glass absolute top-4 left-4 sm:left-8 lg:left-12 z-20"><Icon name="chevronLeft" className="w-5 h-5" /></button>
       <div className="relative z-10 w-full px-4 sm:px-8 lg:px-12 pt-32 pb-10 sm:pb-14">{children}</div>
     </section>
   );
@@ -80,6 +77,31 @@ function ShareButton({ title }: { title: string }) {
 }
 
 function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () => void }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [playing, setPlaying] = useState(false);
+  const playNow = async () => {
+    if (playing) return;
+    const state = useAppStore.getState();
+    const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is NonNullable<typeof source> => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
+    if (!sources.length) { toast('请先在设置中添加并启用点播源', 'warning'); return; }
+    setPlaying(true);
+    try {
+      const result = await api.search(item.title, sources, state.yellowFilter);
+      const matches = result.list.filter((candidate) => candidate.name.trim().toLocaleLowerCase() === item.title.trim().toLocaleLowerCase());
+      const probes = await Promise.all(matches.map(async (candidate) => {
+        const source = sources.find((entry) => entry.key === candidate.sourceKey);
+        if (!source) return null;
+        const probe = await api.detailSpeed(candidate.vodId, source);
+        return probe.ok && probe.detail?.episodes.length ? { candidate, source, ms: probe.ms } : null;
+      }));
+      const best = probes.filter((p): p is NonNullable<typeof p> => p !== null).sort((a, b) => a.ms - b.ms)[0];
+      if (!best) { toast('没有找到可播放的同名影片', 'warning'); return; }
+      void addSearchHistory(item.title).catch(() => {});
+      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.candidate.vodId, index: 0, title: item.title, sourceUrl: best.source.url }));
+    } catch { toast('搜索播放源失败，请稍后重试', 'error'); }
+    finally { setPlaying(false); }
+  };
   const abs = useAbstract(item);
   const tmdb = useTmdbHero(item.id, true);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -105,8 +127,11 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
           {a?.intro && <p className="mt-4 text-sm sm:text-base leading-relaxed text-white/75 line-clamp-3">{a.intro}</p>}
           {(rating || tmdb.data?.score) && <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-white">{rating && <span>豆瓣 {rating}</span>}{tmdb.data?.score && <span>TMDB {tmdb.data.score}</span>}</p>}
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
-            <Link href={`/?s=${encodeURIComponent(item.title)}`} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> 搜索并播放</Link>
-            {/^[0-9]+$/.test(item.id) && <a className="btn-glass" href={`https://movie.douban.com/subject/${item.id}/`} target="_blank" rel="noopener noreferrer">豆瓣页面</a>}
+            <button onClick={playNow} disabled={playing} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> {playing ? '正在查找播放源…' : '立即播放'}</button>
+            {/^[0-9]+$/.test(item.id) && <a className="btn-icon-glass" href={`https://movie.douban.com/subject/${item.id}/`} target="_blank" rel="noopener noreferrer" aria-label="打开豆瓣页面" title="打开豆瓣页面">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="https://www.douban.com/favicon.ico" alt="" className="w-5 h-5 rounded-sm" />
+            </a>}
             <ShareButton title={item.title} />
           </div>
         </div>
@@ -114,8 +139,8 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
       <div className="space-y-10 pt-8 sm:pt-10">
         {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
-        {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" onClick={() => { setStillIndex(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={`查看第 ${i + 1} 张剧照`} aria-pressed={i === stillIndex} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></button>)}</div></section>}
-        {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]"><p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]"><p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
+        {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" onClick={() => { setStillIndex(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={`查看第 ${i + 1} 张剧照`} aria-pressed={i === stillIndex} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></button>)}</div></section>}
+        {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]">{a.people?.find((p) => p.name === name && p.role === '导演')?.photo && <Cover url={a.people.find((p) => p.name === name && p.role === '导演')?.photo} alt={name} className="w-full h-32 object-cover rounded-xl mb-3" />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]">{a.people?.find((p) => p.name === name && p.role === '演员')?.photo && <Cover url={a.people.find((p) => p.name === name && p.role === '演员')?.photo} alt={name} className="w-full h-32 object-cover rounded-xl mb-3" />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
         {(a?.intro || a?.comment) && <section className="px-4 sm:px-8 lg:px-12 max-w-4xl"><h2 className="text-xl sm:text-2xl font-bold mb-4">简介</h2>{a.intro && <p className="text-muted leading-relaxed whitespace-pre-wrap">{a.intro}</p>}{a.comment && <blockquote className="mt-4 text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>}</section>}
       </div>
     </article>

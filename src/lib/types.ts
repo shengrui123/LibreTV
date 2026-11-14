@@ -251,6 +251,7 @@ export interface DoubanAbstract {
   episodes?: string;
   directors?: string[];
   actors?: string[];
+  people?: { name: string; role: '导演' | '演员'; photo?: string }[];
   comment?: string;
   /** 剧情简介 */
   intro?: string;
