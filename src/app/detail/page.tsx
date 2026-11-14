@@ -11,14 +11,14 @@ import { useTmdbHero } from '@/components/use-tmdb-hero';
 import { Icon } from '@/components/icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { useAuth } from '@/components/auth';
-import { useAppStore, resolveSource, isSourceDisabled, isInDisabledSubscription } from '@/lib/store';
+import { useAppStore, resolveSource, isSourceDisabled, isInDisabledSubscription, readQuality } from '@/lib/store';
 import { api } from '@/lib/client-api';
 import { buildWatchUrl, validateSourceUrl } from '@/lib/utils';
 import { formatRemarks } from '@/lib/remarks';
 import { addSearchHistory } from '@/lib/db';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/components/toast';
-import type { DoubanItem, SourceConfig, SearchResultItem, VideoDetail } from '@/lib/types';
+import type { DoubanItem, SearchResultItem } from '@/lib/types';
 
 export default function DetailPage() {
   return <Suspense><DetailContent /></Suspense>;
@@ -82,7 +82,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   const router = useRouter();
   const { toast } = useToast();
   const [playing, setPlaying] = useState(false);
-  const playNow = async () => {
+  const playNow = async (index = 0) => {
     if (playing) return;
     const state = useAppStore.getState();
     const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is NonNullable<typeof source> => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
@@ -95,12 +95,28 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         const source = sources.find((entry) => entry.key === candidate.sourceKey);
         if (!source) return null;
         const probe = await api.detailSpeed(candidate.vodId, source);
-        return probe.ok && probe.detail?.episodes.length ? { candidate, source, ms: probe.ms } : null;
+        return probe.ok && probe.detail && probe.detail.episodes.length > index ? { candidate, source, ms: probe.ms } : null;
       }));
-      const best = probes.filter((p): p is NonNullable<typeof p> => p !== null).sort((a, b) => a.ms - b.ms)[0];
-      if (!best) { toast('没有找到可播放的同名影片', 'warning'); return; }
+      const available = probes.filter((p): p is NonNullable<typeof p> => p !== null);
+      if (!available.length) { toast('没有找到这一集的播放资源', 'warning'); return; }
+      const heights = new Map<string, number>();
+      const missing = available.filter(({ candidate, source }) => {
+        const cached = readQuality(source.key, candidate.vodId);
+        if (cached?.height) heights.set(`${source.key}:${candidate.vodId}`, cached.height);
+        return !cached?.height;
+      });
+      try {
+        for (let i = 0; i < missing.length; i += 50) {
+          await api.qualityProbeStream(missing.slice(i, i + 50).map(({ candidate, source }) => ({ source, id: candidate.vodId })), (result) => {
+            if (result.height) heights.set(`${result.sourceKey}:${result.vodId}`, result.height);
+          });
+        }
+      } catch { /* 画质探测不可用时仍可播放已找到的资源 */ }
+      const best = available.sort((a, b) => (heights.get(`${b.source.key}:${b.candidate.vodId}`) ?? 0) - (heights.get(`${a.source.key}:${a.candidate.vodId}`) ?? 0) || a.ms - b.ms)[0];
+      if (!heights.size) toast('未能识别资源画质，已选择可用源', 'info');
+      else if (heights.size < available.length) toast('部分资源画质无法识别，已选择已知最高画质', 'info');
       void addSearchHistory(item.title).catch(() => {});
-      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.candidate.vodId, index: 0, title: item.title, sourceUrl: best.source.url }));
+      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.candidate.vodId, index, title: item.title, sourceUrl: best.source.url, detail: best.source.detail }));
     } catch { toast('搜索播放源失败，请稍后重试', 'error'); }
     finally { setPlaying(false); }
   };
@@ -139,7 +155,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
           {a?.intro && <p className="mt-4 text-sm sm:text-base leading-relaxed text-white/75 line-clamp-3">{a.intro}</p>}
           {(rating || tmdb.data?.score) && <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-white">{rating && <span>豆瓣 {rating}</span>}{tmdb.data?.score && <span>TMDB {tmdb.data.score}</span>}</p>}
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
-            <button onClick={playNow} disabled={playing} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> {playing ? '正在查找播放源…' : '立即播放'}</button>
+            <button onClick={() => void playNow()} disabled={playing} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> {playing ? '正在查找播放源…' : '立即播放'}</button>
             {/^[0-9]+$/.test(item.id) && <a className="btn-icon-glass" href={`https://movie.douban.com/subject/${item.id}/`} target="_blank" rel="noopener noreferrer" aria-label="打开豆瓣页面" title="打开豆瓣页面">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="https://www.douban.com/favicon.ico" alt="" className="w-5 h-5 rounded-sm" />
@@ -149,7 +165,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         </div>
       </DetailHero>
       <div className="space-y-10 pt-8 sm:pt-10">
-        {(item.isTv || !!a?.episodes) && <RecommendedEpisodes title={item.title} cover={item.cover} />}
+        {(item.isTv || !!a?.episodes) && <RecommendedEpisodes title={item.title} cover={item.cover} count={a?.episodes} onPlay={(index) => { void playNow(index); }} />}
         {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
         {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" onClick={() => { setStillIndex(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={`查看第 ${i + 1} 张剧照`} aria-pressed={i === stillIndex} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></button>)}</div></section>}
@@ -161,42 +177,12 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   );
 }
 
-type ResolvedSeries = { item: SearchResultItem; source: SourceConfig; detail: VideoDetail };
-
-function RecommendedEpisodes({ title, cover }: { title: string; cover?: string }) {
-  const state = useAppStore();
-  const router = useRouter();
-  const { verified } = useAuth();
-  const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
-  useEffect(() => {
-    const unsubscribe = useAppStore.persist.onFinishHydration(() => setHydrated(true));
-    if (useAppStore.persist.hasHydrated()) setHydrated(true);
-    return unsubscribe;
-  }, []);
-  const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
-  const query = useQuery({
-    queryKey: ['series-episodes', title, sources.map((s) => [s.key, s.url, s.detail]), state.yellowFilter],
-    enabled: hydrated && !!verified && sources.length > 0,
-    staleTime: 5 * 60_000,
-    retry: false,
-    queryFn: async ({ signal }): Promise<ResolvedSeries | null> => {
-      const result = await api.search(title, sources, state.yellowFilter, { signal });
-      const matches = result.list.filter((item) => item.name.trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase());
-      const candidates = await Promise.all(matches.map(async (item) => {
-        const source = sources.find((entry) => entry.key === item.sourceKey);
-        if (!source) return null;
-        const probe = await api.detailSpeed(item.vodId, source, signal);
-        return probe.ok && probe.detail?.episodes.length ? { item, source, detail: probe.detail, ms: probe.ms } : null;
-      }));
-      return candidates.filter((item): item is NonNullable<typeof item> => item !== null).sort((a, b) => a.ms - b.ms)[0] ?? null;
-    },
-  });
-  if (!hydrated || !verified) return null;
-  if (!sources.length) return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">添加并启用点播源后可查看剧集。</p></section>;
-  if (query.isLoading) return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p role="status" className="mt-3 text-sm text-muted">正在查找剧集…</p></section>;
-  if (query.isError || !query.data) return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">未找到可播放的同名剧集。</p><button type="button" className="btn-ghost btn-sm mt-3" onClick={() => void query.refetch()}>重新查找</button></section>;
-  const { item, source, detail } = query.data;
-  return <EpisodeRow count={detail.episodes.length} title={title} cover={cover} sourceName={source.name} onPlay={(index) => { void addSearchHistory(title).catch(() => {}); router.push(buildWatchUrl({ sourceKey: source.key, vodId: item.vodId, index, title, sourceUrl: source.url, detail: source.detail })); }} />;
+function RecommendedEpisodes({ title, cover, count, onPlay }: { title: string; cover?: string; count?: string; onPlay: (index: number) => void }) {
+  const episodeCount = Number(count);
+  if (!Number.isInteger(episodeCount) || episodeCount < 1 || episodeCount > 500) {
+    return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">暂无分集资料。</p></section>;
+  }
+  return <EpisodeRow count={episodeCount} title={title} cover={cover} onPlay={onPlay} />;
 }
 
 function EpisodeRow({ count, title, cover, sourceName, onPlay, reversed = false, onReverse, onCopy }: { count: number; title: string; cover?: string; sourceName?: string; onPlay: (index: number) => void; reversed?: boolean; onReverse?: () => void; onCopy?: () => void }) {
