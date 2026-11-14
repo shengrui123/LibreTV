@@ -189,10 +189,12 @@ function HeroSlide({
             {item.title}
           </h2>
           <p className="mt-3 text-[13px] sm:text-sm text-white/80">{metaLine(item, a)}</p>
-          {a?.comment && (
+          {a?.intro ? (
+            <p className="mt-2 text-[13px] sm:text-[15px] text-white/75 leading-relaxed line-clamp-2 sm:line-clamp-3 max-w-lg">{a.intro}</p>
+          ) : a?.comment ? (
             <p className="mt-2 text-[13px] sm:text-[15px] text-white/75 leading-relaxed line-clamp-2 max-w-lg">“{a.comment}”</p>
-          )}
-          {!a?.comment && a?.actors?.length ? (
+          ) : null}
+          {!a?.intro && !a?.comment && a?.actors?.length ? (
             <p className="mt-2 text-[13px] sm:text-[15px] text-white/70 line-clamp-1">主演：{a.actors.slice(0, 4).join(' / ')}</p>
           ) : null}
           <div className="mt-3 flex items-center gap-3 text-[12px] text-white/80">
@@ -309,9 +311,10 @@ export function PreviewModal({
                 <span className="text-sm text-faint">豆瓣评分</span>
               </div>
             )}
+            {a?.intro && <p className="text-[15px] leading-relaxed text-content/85 mb-4">{a.intro}</p>}
             {a?.comment ? (
               <blockquote className="text-[15px] leading-relaxed text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>
-            ) : abs.isLoading ? (
+            ) : a?.intro ? null : abs.isLoading ? (
               <div className="space-y-2">
                 <div className="h-3 rounded bg-chip animate-pulse" />
                 <div className="h-3 w-4/5 rounded bg-chip animate-pulse" />

@@ -252,4 +252,6 @@ export interface DoubanAbstract {
   directors?: string[];
   actors?: string[];
   comment?: string;
+  /** 剧情简介 */
+  intro?: string;
 }

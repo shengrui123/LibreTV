@@ -88,11 +88,57 @@ export async function fetchDoubanRecommend(
 }
 
 
-/** 豆瓣条目摘要（首页 Hero 用）：类型 / 地区 / 年份 / 演职员 / 短评 */
+const MOBILE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+/** 豆瓣移动端 rexxar 接口：含剧情简介，数据中心 IP 下也可用 */
+async function fetchRexxarAbstract(id: string): Promise<DoubanAbstract | null> {
+  for (const kind of ['movie', 'tv']) {
+    try {
+      const res = await fetchUpstream(`https://m.douban.com/rexxar/api/v2/${kind}/${encodeURIComponent(id)}`, {
+        timeoutMs: 6000,
+        headers: { 'User-Agent': MOBILE_UA, Referer: 'https://m.douban.com/', Accept: 'application/json' },
+      });
+      if (!res.ok) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const s = (await res.json()) as any;
+      if (!s?.title) continue;
+      const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+      const names = (v: unknown) =>
+        Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : x?.name)).filter(Boolean).slice(0, 6) : undefined;
+      const rate = typeof s.rating?.value === 'number' && s.rating.value > 0 ? s.rating.value.toFixed(1) : undefined;
+      const eps = Number(s.episodes_count) > 0 ? String(s.episodes_count) : undefined;
+      return {
+        id,
+        title: str(s.title),
+        rate,
+        year: str(s.year),
+        region: Array.isArray(s.countries) ? s.countries.slice(0, 2).join(' ') : undefined,
+        types: Array.isArray(s.genres) ? s.genres.slice(0, 4) : undefined,
+        duration: Array.isArray(s.durations) ? str(s.durations[0]) : undefined,
+        episodes: eps,
+        directors: names(s.directors),
+        actors: names(s.actors),
+        intro: str(s.intro)?.replace(/\s+/g, ' '),
+      };
+    } catch {
+      // 尝试下一种类型
+    }
+  }
+  return null;
+}
+
+/** 豆瓣条目摘要（首页 Hero / 预览弹窗）：优先 rexxar（含简介），失败回退 PC 端 subject_abstract */
 export async function fetchDoubanAbstract(id: string): Promise<DoubanAbstract> {
   const cacheKey = `douban-abstract:${id}`;
   const cached = getCache<DoubanAbstract>(cacheKey);
   if (cached) return cached;
+
+  const rex = await fetchRexxarAbstract(id);
+  if (rex) {
+    setCache(cacheKey, rex, 6 * 60 * 60 * 1000);
+    return rex;
+  }
 
   const target = `https://movie.douban.com/j/subject_abstract?subject_id=${encodeURIComponent(id)}`;
   const urls = [target, ...fallbackProxies().map((p) => p + encodeURIComponent(target))];
