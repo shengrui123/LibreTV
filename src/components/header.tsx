@@ -230,14 +230,14 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
       {/* 玻璃侧边栏 */}
       <div className={cn('fixed inset-0 z-50', !sidebarOpen && 'pointer-events-none')} aria-hidden={!sidebarOpen}>
         <div
-          className={cn('absolute inset-0 bg-black/40 transition-opacity duration-300', sidebarOpen ? 'opacity-100' : 'opacity-0')}
+          className={cn('absolute inset-0 bg-black/20 transition-opacity duration-300', sidebarOpen ? 'opacity-100' : 'opacity-0')}
           onClick={() => setSidebarOpen(false)}
         />
         <aside
           aria-label="侧边栏"
           inert={!sidebarOpen}
           className={cn(
-            'glass absolute left-3 top-3 bottom-3 w-[min(280px,calc(100vw_-_24px))] rounded-[28px] p-3 flex min-h-0 flex-col text-content [--glass-alpha:.62] [--glass-blur:36px] dark:[--glass-alpha:.72]',
+            'glass absolute left-3 top-3 bottom-3 w-[min(280px,calc(100vw_-_24px))] rounded-[28px] p-3 flex min-h-0 flex-col text-content [--glass-alpha:.68] [--glass-sheen:.18] [--glass-blur:52px] [--glass-bright:1.1] dark:[--glass-alpha:.68] dark:[--glass-sheen:.12]',
             'transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
             sidebarOpen ? 'translate-x-0' : '-translate-x-[calc(100%_+_24px)]'
           )}
@@ -364,7 +364,7 @@ function SideLink({
       aria-current={active ? 'page' : undefined}
       className={cn(
         'flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent',
-        active ? 'glass-pill-active text-content' : 'text-muted hover:bg-hover hover:text-content'
+        active ? 'glass-pill-active !bg-white/50 dark:!bg-white/15 text-content' : 'text-muted hover:bg-hover hover:text-content'
       )}
     >
       <Icon name={icon} className="w-5 h-5 shrink-0" />
