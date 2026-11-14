@@ -58,12 +58,11 @@ function DetailContent() {
 function DetailHero({ image, fallback, onBack, children, stills, stillIndex = 0, onSelectStill }: { image?: string; fallback?: boolean; onBack: () => void; children: ReactNode; stills?: string[]; stillIndex?: number; onSelectStill?: (index: number) => void }) {
   return (
     <section data-hero className="relative isolate overflow-hidden min-h-[560px] sm:min-h-[620px] lg:min-h-[min(80vh,760px)] flex items-end bg-[#111] text-white">
-      {stills?.length ? stills.map((url, i) => (
+      {stills?.length ? stills.map((url, i) => url.startsWith('data:') ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img key={`${url}-${i}`} src={url} alt="" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 motion-reduce:transition-none ${i === stillIndex ? 'opacity-100' : 'opacity-0'}`} />)) : image && <Cover url={image} alt="" eager className={`absolute inset-0 w-full h-full object-cover ${fallback ? 'blur-2xl brightness-50 scale-110' : ''}`} />}
+        <img key={i} src={url} alt="" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 motion-reduce:transition-none ${i === stillIndex ? 'opacity-100' : 'opacity-0'}`} />) : <Cover key={`${url}-${i}`} url={url} alt="" eager={i === stillIndex} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 motion-reduce:transition-none ${i === stillIndex ? 'opacity-100' : 'opacity-0'}`} />) : image && !fallback && <Cover url={image} alt="" eager className="absolute inset-0 w-full h-full object-cover" />}
       <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/35 to-black/10" />
       <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/25" />
-      {fallback && image && <div aria-hidden className="absolute right-4 sm:right-8 lg:right-12 top-32 w-24 sm:w-44 lg:w-52 aspect-[2/3] overflow-hidden rounded-2xl shadow-2xl opacity-90"><Cover url={image} alt="" eager className="w-full h-full object-cover" /></div>}
       <button onClick={onBack} aria-label="返回上一页" className="btn-icon-glass absolute top-4 left-4 sm:left-8 lg:left-12 z-20"><Icon name="chevronLeft" className="w-5 h-5" /></button>
       <div className="relative z-10 w-full px-4 sm:px-8 lg:px-12 pt-32 pb-10 sm:pb-14">{children}</div>
       {stills && stills.length > 1 && onSelectStill && <div className="absolute z-20 bottom-2 right-4 sm:bottom-5 sm:right-8 lg:right-12 flex items-center gap-1">{stills.map((url, i) => <button key={i} type="button" aria-label={`查看第 ${i + 1} 张影片画面`} aria-current={i === stillIndex} onClick={() => onSelectStill(i)} className="group grid h-8 min-w-5 place-items-center"><span className={`relative overflow-hidden rounded-full transition-[width,height] duration-500 bg-white/45 ${i === stillIndex ? 'h-1.5 w-6' : 'h-1.5 w-1.5 group-hover:bg-white/75'}`}>{i === stillIndex && <span key={stillIndex} className="hero-progress absolute inset-0 rounded-full bg-white origin-left motion-reduce:animate-none motion-reduce:scale-x-100" style={{ animationDuration: '8000ms' }} />}</span></button>)}</div>}
@@ -231,16 +230,18 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   const a = abs.data;
   const stills = a?.stills ?? [];
   const frames = useVideoFrames(item.title);
+  const heroImages = frames.length ? frames : stills;
+  const heroIndex = stillIndex % Math.max(heroImages.length, 1);
   useEffect(() => {
-    if (frames.length < 2) return;
-    const timer = window.setTimeout(() => setStillIndex((index) => (index + 1) % frames.length), 8000);
+    if (heroImages.length < 2) return;
+    const timer = window.setTimeout(() => setStillIndex((index) => (index + 1) % heroImages.length), 8000);
     return () => window.clearTimeout(timer);
-  }, [stillIndex, frames.length]);
+  }, [stillIndex, heroImages.length]);
   const meta = [item.isTv || a?.episodes ? '剧集' : '电影', a?.types?.join(' / '), a?.year, a?.region, a?.episodes ? `${a.episodes} 集` : a?.duration].filter(Boolean).join(' · ');
   const rating = a?.rate || item.rating;
   return (
     <article>
-      <DetailHero image={item.cover} fallback={!frames.length} onBack={onBack} stills={frames} stillIndex={stillIndex} onSelectStill={setStillIndex}>
+      <DetailHero onBack={onBack} stills={heroImages} stillIndex={heroIndex} onSelectStill={setStillIndex}>
         <div className="max-w-[660px]">
           {tmdb.data?.logo && !logoFailed ? (
             <h1>
