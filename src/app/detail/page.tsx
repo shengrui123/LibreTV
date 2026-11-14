@@ -18,6 +18,7 @@ import { formatRemarks } from '@/lib/remarks';
 import { addSearchHistory } from '@/lib/db';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/components/toast';
+import { useInView } from '@/components/use-in-view';
 import type { DoubanItem, SearchResultItem, SourceConfig } from '@/lib/types';
 
 export default function DetailPage() {
@@ -81,14 +82,16 @@ function ShareButton({ title }: { title: string }) {
   return <button className="btn-icon-glass" aria-label="分享" onClick={share}><svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1" /></svg></button>;
 }
 
+const normalizeTitle = (value: string) => value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase();
+
 /** 从可播放的视频中截取画面；无法跨域读取或分辨率不足时保留海报。 */
-function useVideoFrames(title: string) {
+function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
   const [frames, setFrames] = useState<string[]>([]);
   const { verified } = useAuth();
   const sourceKeys = useAppStore((state) => state.selectedKeys);
   useEffect(() => {
     setFrames([]);
-    if (!verified) return;
+    if (!verified || !enabled) return;
     const controller = new AbortController();
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -113,16 +116,12 @@ function useVideoFrames(title: string) {
     void (async () => {
       const state = useAppStore.getState();
       const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
-      if (!sources.length) return;
-      const result = await api.search(title, sources, state.yellowFilter, { signal: controller.signal });
-      const matches = result.list.filter((item) => item.name.trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase());
-      for (const match of matches) {
+      const matches = episodeUrl ? [] : (sources.length ? (await api.search(title, sources, state.yellowFilter, { signal: controller.signal })).list.filter((item) => normalizeTitle(item.name) === normalizeTitle(title)) : []);
+      const candidates: ({ url: string } | { item: SearchResultItem; source: SourceConfig })[] = episodeUrl ? [{ url: episodeUrl }] : matches.flatMap((item) => { const source = sources.find((entry) => entry.key === item.sourceKey); return source ? [{ item, source }] : []; });
+      for (const candidate of candidates) {
         if (controller.signal.aborted) return;
-        const source = sources.find((entry) => entry.key === match.sourceKey);
-        if (!source) continue;
         try {
-          const detail = await api.detail(match.vodId, source, controller.signal);
-          const url = detail.episodes[0];
+          const url = 'url' in candidate ? candidate.url : (await api.detail(candidate.item.vodId, candidate.source, controller.signal)).episodes[0];
           if (!url || !/^https:\/\//i.test(url)) continue;
           const isHls = /\.m3u8(?:[?#]|$)/i.test(url) && !video.canPlayType('application/vnd.apple.mpegurl');
           const Hls = isHls ? (await import('hls.js')).default : undefined;
@@ -140,15 +139,16 @@ function useVideoFrames(title: string) {
           await metadata;
           if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error('视频时长未知');
           const images: string[] = [];
-          for (const fraction of [0.2, 0.5, 0.8]) {
+          for (const fraction of episodeUrl ? [0.2] : [0.2, 0.5, 0.8]) {
             const seeked = waitFor('seeked');
             video.currentTime = video.duration * fraction;
             await seeked;
             if (video.videoWidth < 1280 || video.videoHeight < 720) throw new Error('视频分辨率不足');
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d')?.drawImage(video, 0, 0);
+            const scale = Math.min(1, 1920 / video.videoWidth);
+            canvas.width = Math.round(video.videoWidth * scale);
+            canvas.height = Math.round(video.videoHeight * scale);
+            canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
             images.push(canvas.toDataURL('image/jpeg', 0.8));
           }
           if (!controller.signal.aborted) setFrames(images);
@@ -157,7 +157,7 @@ function useVideoFrames(title: string) {
       }
     })().catch(() => {});
     return () => { controller.abort(); hls?.destroy(); video.removeAttribute('src'); video.load(); };
-  }, [title, verified, sourceKeys]);
+  }, [title, verified, sourceKeys, episodeUrl, enabled]);
   return frames;
 }
 
@@ -172,7 +172,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [trailer]);
-  const playNow = async (index = 0) => {
+  const playNow = async (index = 0, episodeName?: string) => {
     if (playing) return;
     const state = useAppStore.getState();
     const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is NonNullable<typeof source> => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
@@ -180,12 +180,14 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
     setPlaying(true);
     try {
       const result = await api.search(item.title, sources, state.yellowFilter);
-      const matches = result.list.filter((candidate) => candidate.name.trim().toLocaleLowerCase() === item.title.trim().toLocaleLowerCase());
+      const matches = result.list.filter((candidate) => normalizeTitle(candidate.name) === normalizeTitle(item.title));
       const probes = await Promise.all(matches.map(async (candidate) => {
         const source = sources.find((entry) => entry.key === candidate.sourceKey);
         if (!source) return null;
         const probe = await api.detailSpeed(candidate.vodId, source);
-        return probe.ok && probe.detail && probe.detail.episodes.length > index ? { candidate, source, ms: probe.ms } : null;
+        if (!probe.ok || !probe.detail) return null;
+        const namedIndex = episodeName ? probe.detail.episodeNames?.findIndex((name) => normalizeTitle(name) === normalizeTitle(episodeName)) ?? -1 : index;
+        return namedIndex >= 0 && probe.detail.episodes[namedIndex] ? { candidate, source, ms: probe.ms, index: namedIndex } : null;
       }));
       const available = probes.filter((p): p is NonNullable<typeof p> => p !== null);
       if (!available.length) { toast('没有找到这一集的播放资源', 'warning'); return; }
@@ -206,7 +208,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
       if (!heights.size) toast('未能识别资源画质，已选择可用源', 'info');
       else if (heights.size < available.length) toast('部分资源画质无法识别，已选择已知最高画质', 'info');
       void addSearchHistory(item.title).catch(() => {});
-      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.candidate.vodId, index, title: item.title, sourceUrl: best.source.url, detail: best.source.detail }));
+      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.candidate.vodId, index: best.index, title: item.title, sourceUrl: best.source.url, detail: best.source.detail }));
     } catch { toast('搜索播放源失败，请稍后重试', 'error'); }
     finally { setPlaying(false); }
   };
@@ -260,7 +262,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         </div>
       </DetailHero>
       <div className="space-y-10 pt-8 sm:pt-10">
-        {(item.isTv || !!a?.episodes) && <RecommendedEpisodes title={item.title} cover={item.cover} count={a?.episodes} onPlay={(index) => { void playNow(index); }} />}
+        {(item.isTv || !!a?.episodes) && <RecommendedEpisodes title={item.title} cover={item.cover} count={a?.episodes} onPlay={(index, name) => { void playNow(index, name); }} />}
         <section aria-label="预告片"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">预告片</h2>{extras.isLoading ? <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">正在获取预告片…</p> : extras.data?.trailers?.length ? <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{extras.data.trailers.map((trailer) => <button key={trailer.id} type="button" onClick={() => setTrailer({ id: trailer.id, title: trailer.title })} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] text-left snap-start group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"><div className="relative aspect-video overflow-hidden rounded-2xl bg-chip"><Cover url={trailer.cover} alt="" className="w-full h-full object-cover" /><span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><span className="absolute inset-0 flex items-center justify-center"><span className="glass glass-clear glass-dark rounded-full p-3"><Icon name="play" className="w-5 h-5" /></span></span>{trailer.runtime && <span className="absolute right-3 bottom-3 text-xs text-white">{trailer.runtime}</span>}</div><span className="block mt-2 text-sm font-medium text-content line-clamp-2">{trailer.title}</span></button>)}</div> : <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">暂无预告片</p>}</section>
         {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
@@ -274,20 +276,56 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   );
 }
 
-function RecommendedEpisodes({ title, cover, count, onPlay }: { title: string; cover?: string; count?: string; onPlay: (index: number) => void }) {
+function EpisodeImage({ title, url, cover }: { title: string; url?: string; cover?: string }) {
+  const { ref, inView } = useInView<HTMLDivElement>(!!url, 300);
+  const frames = useVideoFrames(title, url, !!url && inView);
+  return <div ref={ref} className="absolute inset-0">{frames[0] ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={frames[0]} alt="" className="w-full h-full object-cover" />
+  ) : cover ? <><Cover url={cover} alt="" className="w-full h-full object-cover" /><span className="absolute top-3 right-3 rounded-full bg-black/60 px-2 py-1 text-xs text-white">封面</span></> : null}</div>;
+}
+
+function RecommendedEpisodes({ title, cover, count, onPlay }: { title: string; cover?: string; count?: string; onPlay: (index: number, name?: string) => void }) {
   const episodeCount = Number(count);
+  const { verified } = useAuth();
+  const keys = useAppStore((state) => state.selectedKeys);
+  const episodes = useQuery({
+    queryKey: ['episode-metadata', title, episodeCount, keys],
+    enabled: !!verified && Number.isInteger(episodeCount) && episodeCount > 0 && episodeCount <= 500 && keys.length > 0,
+    staleTime: 5 * 60_000, retry: false,
+    queryFn: async ({ signal }) => {
+      const state = useAppStore.getState();
+      const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
+      if (!sources.length) return null;
+      const result = await api.search(title, sources, state.yellowFilter, { signal });
+      for (const match of result.list.filter((item) => normalizeTitle(item.name) === normalizeTitle(title))) {
+        const source = sources.find((entry) => entry.key === match.sourceKey);
+        if (!source) continue;
+        try {
+          const detail = await api.detail(match.vodId, source, signal);
+          const selected = Array.from({ length: episodeCount }, (_, i) => {
+            const grouped = detail.episodeNames?.findIndex((name) => new RegExp(`^第0*${i + 1}[期集](?:上|$)`).test(name.trim())) ?? -1;
+            const index = grouped >= 0 ? grouped : detail.episodes.length === episodeCount ? i : -1;
+            return index < 0 ? undefined : { url: detail.episodes[index], name: detail.episodeNames?.[index] };
+          });
+          if (selected.some(Boolean)) return selected;
+        } catch { if (signal.aborted) throw new Error('已取消'); }
+      }
+      return null;
+    },
+  });
   if (!Number.isInteger(episodeCount) || episodeCount < 1 || episodeCount > 500) {
     return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">暂无分集资料。</p></section>;
   }
-  return <EpisodeRow count={episodeCount} title={title} cover={cover} onPlay={onPlay} />;
+  return <EpisodeRow count={episodeCount} title={title} cover={cover} names={episodes.data?.map((entry) => entry?.name || '')} urls={episodes.data?.map((entry) => entry?.url || '')} onPlay={(index) => onPlay(index, episodes.data?.[index]?.name)} />;
 }
 
-function EpisodeRow({ count, title, cover, sourceName, names, onPlay, reversed = false, onReverse, onCopy }: { count: number; title: string; cover?: string; sourceName?: string; names?: string[]; onPlay: (index: number) => void; reversed?: boolean; onReverse?: () => void; onCopy?: () => void }) {
+function EpisodeRow({ count, title, cover, sourceName, names, urls, onPlay, reversed = false, onReverse, onCopy }: { count: number; title: string; cover?: string; sourceName?: string; names?: string[]; urls?: string[]; onPlay: (index: number) => void; reversed?: boolean; onReverse?: () => void; onCopy?: () => void }) {
   return <section aria-label="剧集列表">
     <div className="px-4 sm:px-8 lg:px-12 flex flex-wrap items-center gap-3"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><span className="text-sm text-muted">共 {count} 集{sourceName ? ` · ${sourceName}` : ''}</span>{onReverse && <button className="btn-ghost btn-sm ml-auto" onClick={onReverse}>{reversed ? '正序排列' : '倒序排列'}</button>}{onCopy && <button className="btn-ghost btn-sm" onClick={onCopy}>复制链接</button>}</div>
     <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">
       {Array.from({ length: count }, (_, i) => reversed ? count - 1 - i : i).map((index) => <button key={index} type="button" onClick={() => onPlay(index)} aria-label={`播放${title}第 ${index + 1} 集`} className="relative shrink-0 w-[70%] sm:w-[36%] lg:w-[25%] aspect-[16/10] rounded-2xl overflow-hidden bg-chip snap-start text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent group">
-        {cover && <Cover url={cover} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm scale-110" />}
+        <EpisodeImage title={title} url={urls?.[index]} cover={cover} />
         <span className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-black/10" />
         <span className="absolute left-4 right-4 bottom-4 text-white"><span className="block text-xs text-white/70">{title}</span><span className="block mt-1 text-lg font-semibold">{names?.[index] || `第 ${index + 1} 集`}</span>{/^20\d{6}/.test(names?.[index] || '') && <span className="block mt-1 text-xs text-white/70">{names![index].slice(0, 4)}-{names![index].slice(4, 6)}-{names![index].slice(6, 8)}</span>}</span>
       </button>)}
@@ -395,7 +433,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
         </div>
       </DetailHero>
       {!!seasons.data?.length && <section className="px-4 sm:px-8 lg:px-12 pt-8"><h2 className="text-lg font-semibold mb-3">全部季</h2><div className="flex gap-2 overflow-x-auto no-scrollbar">{seasons.data.map((entry) => <button key={entry.name} type="button" aria-pressed={entry.name === title} className={entry.name === title ? 'btn-hero shrink-0' : 'btn-ghost shrink-0'} onClick={() => router.push(buildSourceDetailUrl(entry, params.get('returnTo') || '/'))}>{entry.name.slice(seasonBase.length).trim()}</button>)}</div></section>}
-      {episodes.length > 1 && <div className="pt-8 sm:pt-10"><EpisodeRow count={episodes.length} title={title} cover={cover || info?.cover} sourceName={source?.name || sourceName} names={detail?.episodeNames} onPlay={(index) => { void play(index); }} reversed={reversed} onReverse={() => setReversed(!reversed)} onCopy={() => { void copyToClipboard(episodes.join('\n')).then((ok) => toast(ok ? '播放链接已复制' : '复制失败，请检查浏览器权限')); }} /></div>}
+      {episodes.length > 1 && <div className="pt-8 sm:pt-10"><EpisodeRow count={episodes.length} title={title} cover={cover || info?.cover} sourceName={source?.name || sourceName} names={detail?.episodeNames} urls={episodes} onPlay={(index) => { void play(index); }} reversed={reversed} onReverse={() => setReversed(!reversed)} onCopy={() => { void copyToClipboard(episodes.join('\n')).then((ok) => toast(ok ? '播放链接已复制' : '复制失败，请检查浏览器权限')); }} /></div>}
       <div className="px-4 sm:px-8 lg:px-12 pt-8 sm:pt-10 max-w-[1680px] mx-auto">
         {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length > 1 ? null : detail && episodes.length ? <section>
           <div className="flex flex-wrap justify-between items-center gap-3 mb-4"><h2 className="text-xl sm:text-2xl font-bold">剧集 · {episodes.length} 集</h2><div className="flex gap-2"><button className="btn-ghost btn-sm" onClick={() => setReversed(!reversed)}>{reversed ? '正序排列' : '倒序排列'}</button><button className="btn-ghost btn-sm" onClick={async () => toast(await copyToClipboard(episodes.join('\n')) ? '播放链接已复制' : '复制失败，请检查浏览器权限')}>复制链接</button></div></div>
