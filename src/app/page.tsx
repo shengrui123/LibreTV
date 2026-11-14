@@ -226,7 +226,7 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
+      <Header searchPage />
 
       <main className="relative flex-1 max-w-[1680px] w-full mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-10">
         <section className="mb-6 sm:mb-8">

@@ -20,7 +20,7 @@ type NavKey = 'home' | 'movie' | 'tv' | 'live' | 'about' | 'search';
  * - 左侧按钮打开玻璃侧边栏（iPad 样式），宽屏额外显示居中胶囊导航；
  * - 手机端底部是悬浮的玻璃 Tab 栏。
  */
-export function Header(props: { showSearch?: boolean; transparent?: boolean }) {
+export function Header(props: { showSearch?: boolean; transparent?: boolean; searchPage?: boolean }) {
   return (
     <Suspense fallback={<div className={props.transparent ? 'h-0' : 'h-16'} />}>
       <HeaderInner {...props} />
@@ -28,7 +28,7 @@ export function Header(props: { showSearch?: boolean; transparent?: boolean }) {
   );
 }
 
-function HeaderInner({ showSearch = false, transparent = false }: { showSearch?: boolean; transparent?: boolean }) {
+function HeaderInner({ showSearch = false, transparent = false, searchPage = false }: { showSearch?: boolean; transparent?: boolean; searchPage?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -128,14 +128,20 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
           )}
         >
           <div className="pointer-events-auto flex items-center gap-2.5">
-            <GlassCircle label="打开侧边栏" dark={onImage} onClick={() => setSidebarOpen(true)}>
-              <SidebarIcon />
-            </GlassCircle>
+            {searchPage ? (
+              <GlassCircle label="返回首页" dark={onImage} onClick={() => router.push('/')}>
+                <Icon name="chevronLeft" className="w-5 h-5" />
+              </GlassCircle>
+            ) : (
+              <GlassCircle label="打开侧边栏" dark={onImage} onClick={() => setSidebarOpen(true)}>
+                <SidebarIcon />
+              </GlassCircle>
+            )}
           </div>
 
           <div className="flex-1" />
 
-          <div className="pointer-events-auto flex items-center gap-2">
+          {!searchPage && <div className="pointer-events-auto flex items-center gap-2">
             {/* 桌面：玻璃圆钮展开为玻璃胶囊搜索框 */}
             <form
               className="hidden sm:block"
@@ -219,7 +225,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
             <Link href="/?search=1" aria-label="搜索" className={cn('sm:hidden glass glass-clear w-10 h-10 rounded-full grid place-items-center', onImage && 'glass-dark')}>
               <Icon name="search" className="w-[18px] h-[18px]" />
             </Link>
-          </div>
+          </div>}
         </div>
       </header>
 
