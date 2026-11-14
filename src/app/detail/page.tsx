@@ -11,11 +11,10 @@ import { useTmdbHero } from '@/components/use-tmdb-hero';
 import { Icon } from '@/components/icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { useAuth } from '@/components/auth';
-import { useAppStore, resolveSource, isSourceDisabled, isInDisabledSubscription, readQuality } from '@/lib/store';
+import { useAppStore, resolveSource, isSourceDisabled, isInDisabledSubscription } from '@/lib/store';
 import { api } from '@/lib/client-api';
-import { buildWatchUrl, validateSourceUrl } from '@/lib/utils';
+import { validateSourceUrl } from '@/lib/utils';
 import { formatRemarks } from '@/lib/remarks';
-import { addSearchHistory } from '@/lib/db';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/components/toast';
 import { useInView } from '@/components/use-in-view';
@@ -163,7 +162,6 @@ function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
 function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () => void }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [playing, setPlaying] = useState(false);
   const [trailer, setTrailer] = useState<{ id: string; title: string } | null>(null);
   useEffect(() => {
     if (!trailer) return;
@@ -171,45 +169,10 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [trailer]);
-  const playNow = async (index = 0, episodeName?: string) => {
-    if (playing) return;
-    const state = useAppStore.getState();
-    const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is NonNullable<typeof source> => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
-    if (!sources.length) { toast('请先在设置中添加并启用点播源', 'warning'); return; }
-    setPlaying(true);
-    try {
-      const result = await api.search(item.title, sources, state.yellowFilter);
-      const matches = result.list.filter((candidate) => normalizeTitle(candidate.name) === normalizeTitle(item.title));
-      const probes = await Promise.all(matches.map(async (candidate) => {
-        const source = sources.find((entry) => entry.key === candidate.sourceKey);
-        if (!source) return null;
-        const probe = await api.detailSpeed(candidate.vodId, source);
-        if (!probe.ok || !probe.detail) return null;
-        const namedIndex = episodeName ? probe.detail.episodeNames?.findIndex((name) => normalizeTitle(name) === normalizeTitle(episodeName)) ?? -1 : index;
-        return namedIndex >= 0 && probe.detail.episodes[namedIndex] ? { candidate, source, ms: probe.ms, index: namedIndex } : null;
-      }));
-      const available = probes.filter((p): p is NonNullable<typeof p> => p !== null);
-      if (!available.length) { toast('没有找到这一集的播放资源', 'warning'); return; }
-      const heights = new Map<string, number>();
-      const missing = available.filter(({ candidate, source }) => {
-        const cached = readQuality(source.key, candidate.vodId);
-        if (cached?.height) heights.set(`${source.key}:${candidate.vodId}`, cached.height);
-        return !cached?.height;
-      });
-      try {
-        for (let i = 0; i < missing.length; i += 50) {
-          await api.qualityProbeStream(missing.slice(i, i + 50).map(({ candidate, source }) => ({ source, id: candidate.vodId })), (result) => {
-            if (result.height) heights.set(`${result.sourceKey}:${result.vodId}`, result.height);
-          });
-        }
-      } catch { /* 画质探测不可用时仍可播放已找到的资源 */ }
-      const best = available.sort((a, b) => (heights.get(`${b.source.key}:${b.candidate.vodId}`) ?? 0) - (heights.get(`${a.source.key}:${a.candidate.vodId}`) ?? 0) || a.ms - b.ms)[0];
-      if (!heights.size) toast('未能识别资源画质，已选择可用源', 'info');
-      else if (heights.size < available.length) toast('部分资源画质无法识别，已选择已知最高画质', 'info');
-      void addSearchHistory(item.title).catch(() => {});
-      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.candidate.vodId, index: best.index, title: item.title, sourceUrl: best.source.url, detail: best.source.detail }));
-    } catch { toast('搜索播放源失败，请稍后重试', 'error'); }
-    finally { setPlaying(false); }
+  const playNow = (index = 0, episodeName?: string) => {
+    const params = new URLSearchParams({ auto: '1', title: item.title, index: String(index) });
+    if (episodeName) params.set('episodeName', episodeName);
+    router.push(`/watch?${params}`);
   };
   const abs = useAbstract(item);
   const extras = useQuery({
@@ -253,7 +216,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
           {a?.intro && <p className="mt-4 text-sm sm:text-base leading-relaxed text-white/75 line-clamp-3">{a.intro}</p>}
           {(rating || tmdb.data?.score) && <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-white">{rating && <span>豆瓣 {rating}</span>}{tmdb.data?.score && <span>TMDB {tmdb.data.score}</span>}</p>}
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
-            <button onClick={() => void playNow()} disabled={playing} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> {playing ? '正在查找播放源…' : '立即播放'}</button>
+            <button onClick={() => playNow()} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> 立即播放</button>
             {/^[0-9]+$/.test(item.id) && <a className="btn-icon-glass" href={`https://movie.douban.com/subject/${item.id}/`} target="_blank" rel="noopener noreferrer" aria-label="打开豆瓣页面" title="打开豆瓣页面">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="https://www.douban.com/favicon.ico" alt="" className="w-5 h-5 rounded-sm" />
@@ -365,18 +328,8 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
     const timer = window.setTimeout(() => setFrameIndex((index) => (index + 1) % frames.length), 8000);
     return () => window.clearTimeout(timer);
   }, [frameIndex, frames.length]);
-  const [alternatives, setAlternatives] = useState<SearchResultItem[]>([]);
   const params = useSearchParams();
-  const [playingSource, setPlayingSource] = useState(false);
   const seasonBase = title.replace(/\s*(?:第[一二三四五六七八九十百零〇0-9]+季|[Ss]eason\s*\d+|第[一二三四五六七八九十百零〇0-9]+部)\s*$/, '').trim();
-  useEffect(() => {
-    try {
-      const saved: unknown = JSON.parse(sessionStorage.getItem('libretv-detail-sources') || '[]');
-      if (Array.isArray(saved) && saved.some((entry) => entry?.sourceKey === sourceKey && entry?.vodId === id && entry?.name === title)) {
-        setAlternatives(saved.filter((entry): entry is SearchResultItem => typeof entry?.sourceKey === 'string' && typeof entry?.vodId === 'string' && entry?.name === title && typeof entry?.sourceName === 'string'));
-      } else setAlternatives([]);
-    } catch { setAlternatives([]); }
-  }, [id, sourceKey, title]);
   useEffect(() => {
     const unsubscribe = useAppStore.persist.onFinishHydration(() => setHydrated(true));
     if (useAppStore.persist.hasHydrated()) setHydrated(true);
@@ -405,37 +358,12 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
       return result.list.filter((entry) => entry.name.startsWith(seasonBase) && pattern.test(entry.name.slice(seasonBase.length).trim())).filter((entry, i, all) => all.findIndex((other) => other.name === entry.name) === i);
     },
   });
-  const play = async (index: number) => {
-    if (playingSource || !source || !episodes[index]) return;
-    setPlayingSource(true);
-    try {
-      const currentName = detail?.episodeNames?.[index]?.trim();
-      const choices = [{ source, vodId: id, index, ms: 0 }];
-      const state = useAppStore.getState();
-      const activeSources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((entry): entry is SourceConfig => !!entry && validateSourceUrl(entry.url) && !isSourceDisabled(state, entry.key) && !isInDisabledSubscription(state, entry.key));
-      const found = activeSources.length ? await api.search(title, activeSources, state.yellowFilter).catch(() => ({ list: [] as SearchResultItem[] })) : { list: [] as SearchResultItem[] };
-      const candidates = [...alternatives, ...found.list.filter((entry) => entry.name.trim() === title.trim())].filter((entry, i, all) => all.findIndex((other) => other.sourceKey === entry.sourceKey && other.vodId === entry.vodId) === i);
-      const probes = await Promise.all(candidates.filter((entry) => entry.sourceKey !== sourceKey || entry.vodId !== id).map(async (entry) => {
-        const candidate = resolveSource(useAppStore.getState(), entry.sourceKey, { url: entry.sourceUrl, name: entry.sourceName });
-        if (!candidate || !validateSourceUrl(candidate.url) || isSourceDisabled(useAppStore.getState(), candidate.key) || isInDisabledSubscription(useAppStore.getState(), candidate.key)) return null;
-        const probe = await api.detailSpeed(entry.vodId, candidate);
-        if (!probe.ok || !probe.detail) return null;
-        const candidateIndex = currentName && probe.detail.episodeNames ? probe.detail.episodeNames.findIndex((name) => name.trim() === currentName) : -1;
-        const matchedIndex = candidateIndex >= 0 ? candidateIndex : !currentName && probe.detail.episodes.length === episodes.length ? index : -1;
-        return matchedIndex >= 0 && probe.detail.episodes[matchedIndex] ? { source: candidate, vodId: entry.vodId, index: matchedIndex, ms: probe.ms } : null;
-      }));
-      choices.push(...probes.filter((entry): entry is NonNullable<typeof entry> => entry !== null));
-      const heights = new Map<string, number>();
-      for (const choice of choices) { const height = readQuality(choice.source.key, choice.vodId)?.height; if (height) heights.set(`${choice.source.key}:${choice.vodId}`, height); }
-      try {
-        await api.qualityProbeStream(choices.map((choice) => ({ source: choice.source, id: choice.vodId })), (result) => { if (result.height) heights.set(`${result.sourceKey}:${result.vodId}`, result.height); });
-      } catch { /* 画质未知时保留可播放来源 */ }
-      const best = choices.sort((a, b) => (heights.get(`${b.source.key}:${b.vodId}`) ?? 0) - (heights.get(`${a.source.key}:${a.vodId}`) ?? 0) || a.ms - b.ms)[0];
-      if (heights.size < choices.length) toast(heights.size ? '部分资源画质无法识别，已选择已知最高画质' : '未能识别资源画质，已选择可用源', 'info');
-      void addSearchHistory(title).catch(() => {});
-      router.push(buildWatchUrl({ sourceKey: best.source.key, vodId: best.vodId, index: best.index, title, sourceUrl: best.source.url, detail: best.source.detail }));
-    } catch { toast('查找播放资源失败，请稍后重试', 'warning'); }
-    finally { setPlayingSource(false); }
+  const play = (index: number) => {
+    const search = new URLSearchParams({ auto: '1', title, index: String(index), source: sourceKey, id });
+    if (sourceUrl || source?.url) search.set('sourceUrl', sourceUrl || source!.url);
+    if (source?.detail) search.set('detail', source.detail);
+    if (detail?.episodeNames?.[index]) search.set('episodeName', detail.episodeNames[index]);
+    router.push(`/watch?${search}`);
   };
   const description = info?.desc?.replace(/<[^>]*>/g, '').trim();
   return (
@@ -446,7 +374,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
           <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>
           <p className="mt-2 text-sm text-white/70">{source?.name || sourceName}</p>
           {description && <p className="mt-4 text-sm sm:text-base text-white/75 leading-relaxed line-clamp-3">{description}</p>}
-          <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => void play(0)} disabled={playingSource}><Icon name="play" className="w-4 h-4" /> {playingSource ? '正在查找播放源…' : '立即播放'}</button>}<ShareButton title={title} /></div>
+          <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => play(0)}><Icon name="play" className="w-4 h-4" /> 立即播放</button>}<ShareButton title={title} /></div>
         </div>
       </DetailHero>
       {!!seasons.data?.length && <section className="px-4 sm:px-8 lg:px-12 pt-8"><h2 className="text-lg font-semibold mb-3">全部季</h2><div className="flex gap-2 overflow-x-auto no-scrollbar">{!seasons.data.some((entry) => normalizeTitle(entry.name) === normalizeTitle(title)) && <button type="button" aria-current="true" className="btn-hero shrink-0">{title.slice(seasonBase.length).trim() || '当前季'}</button>}{seasons.data.map((entry) => <button key={entry.name} type="button" aria-pressed={entry.name === title} className={entry.name === title ? 'btn-hero shrink-0' : 'btn-ghost shrink-0'} onClick={() => router.push(buildSourceDetailUrl(entry, params.get('returnTo') || '/'))}>{entry.name.slice(seasonBase.length).trim()}</button>)}</div></section>}

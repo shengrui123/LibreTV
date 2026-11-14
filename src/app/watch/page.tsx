@@ -24,17 +24,19 @@ import { useToast } from '@/components/toast';
 import { enqueueDownload } from '@/components/download-manager';
 import { Icon } from '@/components/icon';
 import { useAuth } from '@/components/auth';
-import { resolveSource, useAppStore } from '@/lib/store';
+import { resolveSource, useAppStore, isSourceDisabled, isInDisabledSubscription, readQuality } from '@/lib/store';
+import type { SourceConfig } from '@/lib/types';
 import { qualityKey } from '@/lib/quality';
 import {
   clearProgress,
   progressKeyOf,
   saveProgress,
   updateHistoryProgress,
+  addSearchHistory,
   upsertHistory,
   db,
 } from '@/lib/db';
-import { cn } from '@/lib/utils';
+import { buildWatchUrl, cn, validateSourceUrl } from '@/lib/utils';
 
 /**
  * 播放页（唯一入口，替代旧版 watch.html → player.html 跳转链）。
@@ -44,9 +46,76 @@ import { cn } from '@/lib/utils';
 export default function WatchPage() {
   return (
     <Suspense>
-      <WatchContent />
+      <WatchEntry />
     </Suspense>
   );
+}
+
+function WatchEntry() {
+  const params = useSearchParams();
+  return params.get('auto') === '1' ? <AutoResolve /> : <WatchContent />;
+}
+
+function AutoResolve() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const { verified } = useAuth();
+  const selectedKeys = useAppStore((state) => state.selectedKeys);
+  const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
+  useEffect(() => {
+    const unsubscribe = useAppStore.persist.onFinishHydration(() => setHydrated(true));
+    if (useAppStore.persist.hasHydrated()) setHydrated(true);
+    return unsubscribe;
+  }, []);
+  const title = params.get('title') || '';
+  const episodeName = params.get('episodeName') || '';
+  const index = Math.max(0, parseInt(params.get('index') || '0', 10) || 0);
+  const sourceKey = params.get('source') || '';
+  const vodId = params.get('id') || '';
+  const sourceUrl = params.get('sourceUrl') || '';
+  const detailUrl = params.get('detail') || '';
+  const normalize = (value: string) => value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase();
+  const query = useQuery({
+    queryKey: ['auto-play', title, episodeName, index, sourceKey, vodId, sourceUrl, detailUrl, selectedKeys],
+    enabled: !!verified && hydrated,
+    retry: false, staleTime: 0,
+    queryFn: async ({ signal }) => {
+      if (!title) throw new Error('缺少影片名称');
+      const state = useAppStore.getState();
+      const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
+      const hinted = sourceKey && vodId ? resolveSource(state, sourceKey, { url: sourceUrl || undefined, detail: detailUrl || undefined }) : undefined;
+      if (hinted && validateSourceUrl(hinted.url) && !isSourceDisabled(state, hinted.key) && !isInDisabledSubscription(state, hinted.key) && !sources.some((source) => source.key === hinted.key)) sources.push(hinted);
+      if (!sources.length) throw new Error('请先在设置中添加并启用点播源');
+      const result = await api.search(title, sources, state.yellowFilter, { signal }).catch((error) => { if (signal.aborted || !hinted) throw error; return { list: [] }; });
+      const candidates: { source: SourceConfig; id: string }[] = result.list.filter((item) => normalize(item.name) === normalize(title)).flatMap((item) => { const source = sources.find((entry) => entry.key === item.sourceKey); return source ? [{ source, id: item.vodId }] : []; });
+      if (hinted && vodId && sources.some((source) => source.key === hinted.key)) candidates.push({ source: hinted, id: vodId });
+      const unique = candidates.filter((candidate, i) => candidates.findIndex((other) => other.source.key === candidate.source.key && other.id === candidate.id) === i);
+      const probes = await Promise.all(unique.map(async (candidate) => {
+        const probe = await api.detailSpeed(candidate.id, candidate.source, signal);
+        if (!probe.ok || !probe.detail) return null;
+        const namedIndex = episodeName ? probe.detail.episodeNames?.findIndex((name) => normalize(name) === normalize(episodeName)) ?? -1 : index;
+        return namedIndex >= 0 && probe.detail.episodes[namedIndex] ? { ...candidate, index: namedIndex, ms: probe.ms } : null;
+      }));
+      const available = probes.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      if (!available.length) throw new Error('没有找到这一集的播放资源');
+      const heights = new Map<string, number>();
+      for (const entry of available) { const height = readQuality(entry.source.key, entry.id)?.height; if (height) heights.set(`${entry.source.key}:${entry.id}`, height); }
+      const missing = available.filter((entry) => !heights.has(`${entry.source.key}:${entry.id}`));
+      try {
+        for (let i = 0; i < missing.length; i += 50) {
+          await api.qualityProbeStream(missing.slice(i, i + 50).map((entry) => ({ source: entry.source, id: entry.id })), (result) => { if (result.height) heights.set(`${result.sourceKey}:${result.vodId}`, result.height); }, signal);
+        }
+      } catch (error) { if (signal.aborted) throw error; }
+      const best = available.sort((a, b) => (heights.get(`${b.source.key}:${b.id}`) ?? 0) - (heights.get(`${a.source.key}:${a.id}`) ?? 0) || a.ms - b.ms)[0];
+      return buildWatchUrl({ sourceKey: best.source.key, vodId: best.id, index: best.index, title, sourceUrl: best.source.url, detail: best.source.detail });
+    },
+  });
+  useEffect(() => {
+    if (!query.data) return;
+    void addSearchHistory(title).catch(() => {});
+    router.replace(query.data);
+  }, [query.data, router, title]);
+  return <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-6"><button className="btn-icon-glass absolute left-4 top-4" aria-label="返回" onClick={() => { if (window.history.length > 1) router.back(); else router.push('/'); }}><Icon name="chevronLeft" className="w-5 h-5" /></button>{query.isError ? <><p role="alert" className="text-center">{query.error instanceof Error ? query.error.message : '查找播放资源失败'}</p><button className="btn-ghost mt-4" onClick={() => void query.refetch()}>重试</button></> : <><Spinner size="lg" /><p role="status" className="mt-4 text-white/70">正在查找播放资源…</p></>}</main>;
 }
 
 function WatchContent() {
