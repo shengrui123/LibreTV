@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Cover } from '@/components/home-rows';
+import { Cover, Row, PosterCard, POSTER_W } from '@/components/home-rows';
+import { buildRecommendationDetailUrl } from '@/lib/detail-url';
 import { useAbstract } from '@/components/home-hero';
 import { useTmdbHero } from '@/components/use-tmdb-hero';
 import { Icon } from '@/components/icon';
@@ -103,6 +104,16 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
     finally { setPlaying(false); }
   };
   const abs = useAbstract(item);
+  const extras = useQuery({
+    queryKey: ['douban-extras', item.id, item.isTv],
+    queryFn: async ({ signal }): Promise<{ people: { name: string; role: string; photo?: string }[]; items: DoubanItem[] }> => {
+      const params = new URLSearchParams({ id: item.id, type: item.isTv ? 'tv' : 'movie' });
+      const response = await fetch(`/api/douban/extras?${params}`, { signal });
+      if (!response.ok) throw new Error('获取失败');
+      return response.json();
+    },
+    enabled: /^\d{1,12}$/.test(item.id), staleTime: 60 * 60_000, retry: false,
+  });
   const tmdb = useTmdbHero(item.id, true);
   const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => setLogoFailed(false), [tmdb.data?.logo]);
@@ -140,8 +151,9 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
         {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" onClick={() => { setStillIndex(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={`查看第 ${i + 1} 张剧照`} aria-pressed={i === stillIndex} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></button>)}</div></section>}
-        {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]">{a.people?.find((p) => p.name === name && p.role === '导演')?.photo && <Cover url={a.people.find((p) => p.name === name && p.role === '导演')?.photo} alt={name} className="w-full h-32 object-cover rounded-xl mb-3" />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]">{a.people?.find((p) => p.name === name && p.role === '演员')?.photo && <Cover url={a.people.find((p) => p.name === name && p.role === '演员')?.photo} alt={name} className="w-full h-32 object-cover rounded-xl mb-3" />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
+        {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo && <Cover url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo} alt={name} className="w-full h-32 object-cover rounded-xl mb-3" />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 min-w-[144px]">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo && <Cover url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo} alt={name} className="w-full h-32 object-cover rounded-xl mb-3" />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
         {(a?.intro || a?.comment) && <section className="px-4 sm:px-8 lg:px-12 max-w-4xl"><h2 className="text-xl sm:text-2xl font-bold mb-4">简介</h2>{a.intro && <p className="text-muted leading-relaxed whitespace-pre-wrap">{a.intro}</p>}{a.comment && <blockquote className="mt-4 text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>}</section>}
+        {!!extras.data?.items.length && <Row title="相关推荐">{extras.data.items.map((recommendation) => <PosterCard key={recommendation.id} item={recommendation} className={POSTER_W} showTitle onOpen={(picked) => router.push(buildRecommendationDetailUrl(picked, window.location.pathname + window.location.search))} />)}</Row>}
       </div>
     </article>
   );
