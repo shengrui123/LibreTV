@@ -222,6 +222,11 @@ export interface HeroEntry {
   abstract: DoubanAbstract;
 }
 
+// Multiple visitors can request the same cold hero before the first response is
+// cached. Share that work within an instance instead of repeating every upstream
+// detail request and increasing the likelihood of rate limiting.
+const pendingHeroes = new Map<string, Promise<HeroEntry[]>>();
+
 /**
  * 首页 Hero 数据：热门列表中「有高清横版剧照」的前 N 部。
  * 服务端低并发逐个拉摘要（避免触发豆瓣限流），整体缓存 30 分钟。
@@ -231,6 +236,18 @@ export async function fetchDoubanHero(type: 'movie' | 'tv', count = 8): Promise<
   const cached = getCache<HeroEntry[]>(cacheKey);
   if (cached) return cached;
 
+  const pending = pendingHeroes.get(cacheKey);
+  if (pending) return pending;
+  const request = loadDoubanHero(type, count, cacheKey);
+  pendingHeroes.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    pendingHeroes.delete(cacheKey);
+  }
+}
+
+async function loadDoubanHero(type: 'movie' | 'tv', count: number, cacheKey: string): Promise<HeroEntry[]> {
   const list = await fetchDoubanRecommend(type, '热门', 0, 24);
   const out: HeroEntry[] = [];
   const queue = list.slice(0, count + 4);

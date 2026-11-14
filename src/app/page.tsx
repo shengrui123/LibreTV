@@ -2,12 +2,11 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
-import { DoubanView } from '@/components/douban-section';
 import { HomeHero, PreviewModal } from '@/components/home-hero';
 import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, MOVIE_CATEGORIES, TV_CATEGORIES, useDoubanList } from '@/components/home-rows';
-import { DetailModal } from '@/components/detail-modal';
 import { AggregatedCard, aggregateResults } from '@/components/video-card';
 import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled } from '@/lib/store';
 import { api } from '@/lib/client-api';
@@ -24,6 +23,10 @@ import { Icon } from '@/components/icon';
  */
 /** 搜索结果分批渲染的批大小：一次挂载上千张卡片会明显掉帧 */
 const RESULT_PAGE_SIZE = 60;
+
+// 首页首屏不需要频道网格和搜索详情，将它们留到用户打开时再加载。
+const DoubanView = dynamic(() => import('@/components/douban-section').then((mod) => mod.DoubanView));
+const DetailModal = dynamic(() => import('@/components/detail-modal').then((mod) => mod.DetailModal));
 
 export default function HomePage() {
   return (
@@ -414,7 +417,7 @@ function HomeContent() {
 
       </main>
 
-      <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
+      {detailItem && <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />}
     </div>
   );
 }

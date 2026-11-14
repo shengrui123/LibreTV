@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ThemeToggle } from './theme';
-import { SourceManagerDrawer } from './source-manager';
-import { HistoryPanel } from './history-panel';
 import { requestShowDownloadManager } from './download-manager';
 import { Icon, type IconName } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
+
+const SourceManagerDrawer = dynamic(() => import('./source-manager').then((mod) => mod.SourceManagerDrawer));
+const HistoryPanel = dynamic(() => import('./history-panel').then((mod) => mod.HistoryPanel));
 
 type NavKey = 'home' | 'movie' | 'tv' | 'live' | 'about' | 'search';
 
@@ -33,6 +35,12 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
   const searchParams = useSearchParams();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // 首次打开时加载面板；之后保留挂载，让关闭过渡和面板状态正常工作。
+  useEffect(() => { if (settingsOpen) setSettingsLoaded(true); }, [settingsOpen]);
+  useEffect(() => { if (historyOpen) setHistoryLoaded(true); }, [historyOpen]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(showSearch);
   const [scrolled, setScrolled] = useState(false);
@@ -296,8 +304,8 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
         </div>
       </nav>
 
-      <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      {(settingsOpen || settingsLoaded) && <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {(historyOpen || historyLoaded) && <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />}
     </>
   );
 }
