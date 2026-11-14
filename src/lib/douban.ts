@@ -1,4 +1,4 @@
-import type { DoubanItem } from './types';
+import type { DoubanItem, DoubanAbstract } from './types';
 import { fetchUpstream, getCache, setCache } from './fetch-utils';
 
 /**
@@ -85,4 +85,48 @@ export async function fetchDoubanRecommend(
 
   setCache(cacheKey, items, CACHE_TTL);
   return items;
+}
+
+
+/** 豆瓣条目摘要（首页 Hero 用）：类型 / 地区 / 年份 / 演职员 / 短评 */
+export async function fetchDoubanAbstract(id: string): Promise<DoubanAbstract> {
+  const cacheKey = `douban-abstract:${id}`;
+  const cached = getCache<DoubanAbstract>(cacheKey);
+  if (cached) return cached;
+
+  const target = `https://movie.douban.com/j/subject_abstract?subject_id=${encodeURIComponent(id)}`;
+  const urls = [target, ...fallbackProxies().map((p) => p + encodeURIComponent(target))];
+  for (const u of urls) {
+    try {
+      const res = await fetchUpstream(u, {
+        timeoutMs: 6000,
+        headers: { 'User-Agent': UA, Referer: 'https://movie.douban.com/', Accept: 'application/json' },
+      });
+      if (!res.ok) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (await res.json()) as { subject?: any };
+      const s = data.subject;
+      if (!s) continue;
+      const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+      const arr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 6) : undefined);
+      const result: DoubanAbstract = {
+        id,
+        title: str(s.title),
+        rate: str(s.rate),
+        year: str(s.release_year),
+        region: str(s.region),
+        types: arr(s.types),
+        duration: str(s.duration),
+        episodes: str(s.episodes_count),
+        directors: arr(s.directors),
+        actors: arr(s.actors),
+        comment: str(s.short_comment?.content),
+      };
+      setCache(cacheKey, result, 6 * 60 * 60 * 1000);
+      return result;
+    } catch {
+      // 尝试下一个
+    }
+  }
+  throw new Error('豆瓣摘要获取失败');
 }

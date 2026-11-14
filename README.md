@@ -1,5 +1,7 @@
 # LibreTV
 
+> 🎬 **本分支：Apple TV / Netflix 风格 UI 改版** —— 纯黑影院主题、全幅 Hero 轮播（豆瓣今日热门 + 条目摘要）、横向滚动内容行（排行 / 精选大卡 / 分类磁贴）、Netflix 式预览弹窗、电影 / 剧集频道页、Apple 风格搜索页，以及手机端 iOS 式底部 Tab 栏。
+
 LibreTV Next.js 迁移版：免费在线视频聚合搜索与观看平台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
 
 > 🏠 **官网**：[LibreTV 官网](https://libretv.is-an.org/)

@@ -1,15 +1,17 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
-import { RecommendSection } from '@/components/douban-section';
+import { DoubanView } from '@/components/douban-section';
+import { HomeHero, PreviewModal } from '@/components/home-hero';
+import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, useDoubanList } from '@/components/home-rows';
 import { DetailModal } from '@/components/detail-modal';
 import { AggregatedCard, aggregateResults } from '@/components/video-card';
 import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled } from '@/lib/store';
 import { api } from '@/lib/client-api';
-import type { SearchResultItem, SourceSearchOutcome } from '@/lib/types';
+import type { DoubanItem, SearchResultItem, SourceSearchOutcome } from '@/lib/types';
 import { SearchHistoryDropdown, useSearchHistory } from '@/components/search-history';
 import { cn, formatDisableTtl, validateSourceUrl } from '@/lib/utils';
 import { useToast } from '@/components/toast';
@@ -46,7 +48,10 @@ function HomeContent() {
   const sourceHealth = useAppStore((s) => s.sourceHealth);
   const subscriptions = useAppStore((s) => s.subscriptions);
   const [input, setInput] = useState(urlQuery);
+  const doubanEnabled = useAppStore((s) => s.doubanEnabled);
   const [detailItem, setDetailItem] = useState<SearchResultItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<DoubanItem | null>(null);
+  const closePreview = useCallback(() => setPreviewItem(null), []);
   /** 流式搜索中已结算的源（data 就绪前用于增量渲染） */
   const [streamedOutcomes, setStreamedOutcomes] = useState<SourceSearchOutcome[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -163,33 +168,74 @@ function HomeContent() {
   const visibleGroups = useMemo(() => groups.slice(0, visibleCount), [groups, visibleCount]);
   useEffect(() => setVisibleCount(RESULT_PAGE_SIZE), [groups]);
 
+  const browse = searchParams.get('browse');
+  const browseType = browse === 'movie' || browse === 'tv' ? browse : null;
+  const browseTag = searchParams.get('tag') || '热门';
+  const searchMode = Boolean(urlQuery) || searchParams.get('search') === '1' || !doubanEnabled;
+
+  const openPreview = (item: DoubanItem) => setPreviewItem(item);
+  const playItem = (item: DoubanItem) => {
+    setPreviewItem(null);
+    setInput(item.title);
+    runSearch(item.title);
+  };
+
+  // 首页：Apple TV / Netflix 式 Hero + 横向内容行
+  if (!searchMode && !browseType) {
+    return (
+      <div className="min-h-screen flex flex-col bg-page">
+        <Header transparent />
+        <h1 className="sr-only">LibreTV</h1>
+        <HomeHero onPlay={playItem} onMore={openPreview} />
+        <main className="relative z-10 -mt-6 md:-mt-12 flex-1 space-y-4 sm:space-y-6 pb-10">
+          <DoubanRow title="今日热门电影" type="movie" tag="热门" ranked href="/?browse=movie" onOpen={openPreview} />
+          <DoubanRow title="今日热门剧集" type="tv" tag="热门" ranked href="/?browse=tv" onOpen={openPreview} />
+          <CategoryRow />
+          <DoubanRow title="最新上映" type="movie" tag="最新" href="/?browse=movie&tag=%E6%9C%80%E6%96%B0" onOpen={openPreview} />
+          <DoubanRow title="精选美剧" type="tv" tag="美剧" feature href="/?browse=tv&tag=%E7%BE%8E%E5%89%A7" onOpen={openPreview} />
+          <DoubanRow title="豆瓣高分精选" type="movie" tag="豆瓣高分" href="/?browse=movie&tag=%E8%B1%86%E7%93%A3%E9%AB%98%E5%88%86" onOpen={openPreview} />
+          <DoubanRow title="热门动画" type="tv" tag="日本动画" href="/?browse=tv&tag=%E6%97%A5%E6%9C%AC%E5%8A%A8%E7%94%BB" onOpen={openPreview} />
+          <BangumiTodayRow onOpen={openPreview} />
+          <DoubanRow title="华语电影" type="movie" tag="华语" href="/?browse=movie&tag=%E5%8D%8E%E8%AF%AD" onOpen={openPreview} />
+          <DoubanRow title="热播国产剧" type="tv" tag="国产剧" href="/?browse=tv&tag=%E5%9B%BD%E4%BA%A7%E5%89%A7" onOpen={openPreview} />
+          <DoubanRow title="韩剧精选" type="tv" tag="韩剧" feature href="/?browse=tv&tag=%E9%9F%A9%E5%89%A7" onOpen={openPreview} />
+          <HotListRow title="豆瓣一周口碑" id="douban_movie_weekly" ranked onOpen={openPreview} />
+          <HotListRow title="国产剧周榜" id="douban_tv_chinese" ranked onOpen={openPreview} />
+          <DoubanRow title="综艺" type="tv" tag="综艺" href="/?browse=tv&tag=%E7%BB%BC%E8%89%BA" onOpen={openPreview} />
+          <DoubanRow title="冷门佳片" type="movie" tag="冷门佳片" href="/?browse=movie&tag=%E5%86%B7%E9%97%A8%E4%BD%B3%E7%89%87" onOpen={openPreview} />
+          <DoubanRow title="纪录片" type="tv" tag="纪录片" href="/?browse=tv&tag=%E7%BA%AA%E5%BD%95%E7%89%87" onOpen={openPreview} />
+        </main>
+        <SiteFooter />
+        <PreviewModal item={previewItem} onClose={closePreview} onPlay={playItem} />
+      </div>
+    );
+  }
+
+  // 频道页：电影 / 剧集，标签筛选 + 无限滚动网格
+  if (browseType && !searchMode) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-10">
+          <h1 className="text-[34px] sm:text-5xl font-extrabold tracking-tight text-content mb-5">
+            {browseType === 'movie' ? '电影' : '剧集'}
+          </h1>
+          <DoubanView key={browseType} fixedType={browseType} initialTag={browseTag} onPick={openPreview} />
+        </main>
+        <SiteFooter />
+        <PreviewModal item={previewItem} onClose={closePreview} onPlay={playItem} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
 
-      <main className="relative flex-1 max-w-6xl w-full mx-auto px-4 py-6">
-        {/* 首屏氛围渐变 */}
-        {!urlQuery && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-[420px] -z-10"
-            style={{
-              background:
-                'radial-gradient(60% 60% at 50% 0%, rgba(35,173,229,0.10) 0%, rgba(35,173,229,0.03) 45%, transparent 75%)',
-            }}
-          />
-        )}
-
-        {/* 搜索区 */}
-        <section className={cn('flex flex-col items-center', urlQuery ? 'mb-6' : 'mt-8 mb-8')}>
-          {!urlQuery && (
-            <header className="text-center mb-6">
-              <h1 className="text-4xl sm:text-5xl font-bold brand-gradient">LibreTV</h1>
-            </header>
-          )}
-          {urlQuery && <h1 className="sr-only">LibreTV 视频搜索</h1>}
-          {/* 定位容器比胶囊宽一圈：浮层按它的宽度对齐，接缝处不会与胶囊边框错位 1px */}
-          <div ref={searchHistory.containerRef} className="relative w-full max-w-2xl">
+      <main className="relative flex-1 max-w-[1680px] w-full mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-10">
+        <section className="mb-6 sm:mb-8">
+          <h1 className="text-[34px] sm:text-5xl font-extrabold tracking-tight text-content mb-5">搜索</h1>
+          <div ref={searchHistory.containerRef} className="relative w-full max-w-3xl">
             <form
               className="w-full"
               onSubmit={(e) => {
@@ -204,19 +250,21 @@ function HomeContent() {
                   // 12px 圆角矩形（非胶囊）：收起态与展开态共用同一组上圆角，
                   // 展开时输入框这部分形状完全不发生变化，上下圆角也与下拉保持一致；
                   // 右侧与上下不留内边距，由搜索按钮拉伸填满、与搜索框边缘贴合
-                  'flex items-stretch min-h-12 pl-4 border',
+                  'flex items-stretch min-h-[52px] pl-4 border',
                   'transition-[background-color,border-color,border-radius] duration-200',
                   searchHistory.visible
                     ? // 展开时：外框（含上圆角）沿用输入框的聚焦样式不变，只把底边改为内部分隔线，
                       // 使输入区在展开状态下仍是边界清晰的独立输入框，而非与列表糊成一片
                       'rounded-t-xl rounded-b-none border-accent border-b-line bg-surface-raised'
-                    : 'rounded-xl border-line bg-chip focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/40'
+                    : 'rounded-xl border-transparent bg-chip focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30'
                 )}
               >
+                <Icon name="search" className="w-5 h-5 self-center mr-2.5 text-faint shrink-0" />
                 <input
                   ref={inputRef}
-                  className="flex-1 min-w-0 pr-2 bg-transparent text-sm text-content placeholder:text-faint focus:outline-none"
-                  placeholder="输入影片名称..."
+                  autoFocus={!urlQuery}
+                  className="flex-1 min-w-0 pr-2 bg-transparent text-[16px] text-content placeholder:text-faint focus:outline-none"
+                  placeholder="电影、剧集、动漫、综艺…"
                   value={input}
                   maxLength={100}
                   onChange={(e) => {
@@ -255,12 +303,11 @@ function HomeContent() {
                 <button
                   type="submit"
                   className={cn(
-                    'btn-primary shrink-0 px-4 font-medium transition-[background-color,filter] active:brightness-90',
+                    'btn-primary shrink-0 px-5 font-semibold transition-[background-color,filter] active:brightness-90 active:!scale-100',
                     '!rounded-l-none',
                     searchHistory.visible ? '!rounded-tr-xl !rounded-br-none' : '!rounded-r-xl'
                   )}
                 >
-                  <Icon name="search" className="w-4 h-4" />
                   搜索
                 </button>
               </div>
@@ -279,6 +326,8 @@ function HomeContent() {
             )}
           </div>
         </section>
+
+        {!urlQuery && <SearchSuggestions onPick={(t) => { setInput(t); runSearch(t); }} />}
 
         {/* 搜索结果 */}
         {urlQuery && (
@@ -301,7 +350,7 @@ function HomeContent() {
             </div>
 
             {failures.length > 0 && (
-              <div className="mb-3 text-xs bg-chip rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-1">
+              <div className="mb-3 text-xs bg-chip rounded-xl px-3 py-2 flex flex-wrap gap-x-3 gap-y-1">
                 <span className="text-faint">{isSearching ? '以下源暂时无响应：' : '部分点播源请求失败：'}</span>
                 {failures.map((f) => (
                   <span key={f.sourceKey} className={f.timedOut ? 'text-warning' : 'text-faint'}>
@@ -330,7 +379,7 @@ function HomeContent() {
               <NoSourceGuide hasSources={customAPIs.length > 0 || envSources.length > 0} />
             ) : list.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
                   {visibleGroups.map((group) => (
                     <AggregatedCard
                       key={group.key}
@@ -364,21 +413,40 @@ function HomeContent() {
           </section>
         )}
 
-        {/* 首页推荐（有搜索时隐藏） */}
-        {!urlQuery && (
-          <RecommendSection
-            onPick={(title) => {
-              setInput(title);
-              runSearch(title);
-            }}
-          />
-        )}
       </main>
 
       <SiteFooter />
 
       <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
     </div>
+  );
+}
+
+/** 搜索页空态：热门电影 / 剧集作为「大家都在搜」 */
+function SearchSuggestions({ onPick }: { onPick: (title: string) => void }) {
+  const movies = useDoubanList('movie', '热门');
+  const tv = useDoubanList('tv', '热门');
+  const titles = [...(movies.data ?? []).slice(0, 10), ...(tv.data ?? []).slice(0, 10)];
+  if (titles.length === 0) return null;
+  return (
+    <section aria-label="热门搜索" className="max-w-3xl">
+      <h2 className="text-xl font-bold text-content mb-3">大家都在搜</h2>
+      <ul className="grid sm:grid-cols-2 gap-x-8">
+        {titles.map((item, i) => (
+          <li key={item.id + i}>
+            <button
+              type="button"
+              onClick={() => onPick(item.title)}
+              className="w-full flex items-center gap-3 py-3 border-b border-line/50 text-left group"
+            >
+              <Icon name="search" className="w-4 h-4 text-faint shrink-0" />
+              <span className="flex-1 truncate text-[15px] text-accent group-hover:underline">{item.title}</span>
+              {item.rating && <span className="text-xs text-faint">★ {item.rating}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

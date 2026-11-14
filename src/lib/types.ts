@@ -238,3 +238,18 @@ export interface SourceListPayload {
   /** 解析统计（格式、跳过与截断），老数据可能缺失 */
   stats?: SubscriptionParseStats;
 }
+
+/** 豆瓣条目摘要 */
+export interface DoubanAbstract {
+  id: string;
+  title?: string;
+  rate?: string;
+  year?: string;
+  region?: string;
+  types?: string[];
+  duration?: string;
+  episodes?: string;
+  directors?: string[];
+  actors?: string[];
+  comment?: string;
+}

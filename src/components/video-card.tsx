@@ -401,47 +401,30 @@ export function DoubanCard({ item, onClick }: { item: { title: string; cover: st
   useEffect(() => setImgFailed(false), [item.cover]);
 
   return (
-    <div
-      className="card cursor-pointer hover:scale-[1.03] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          // 阻止空格触发页面滚动（AggregatedCard 已是此写法，此处对齐）
-          e.preventDefault();
-          onClick();
-        }
-      }}
-    >
-      <div className="relative aspect-[2/3] bg-chip">
+    <button type="button" className="group/card block w-full text-left focus-visible:outline-none" onClick={onClick}>
+      <div className="poster-lift relative aspect-[2/3] rounded-[10px] overflow-hidden bg-chip ring-1 ring-white/5 group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
         {item.cover && !imgFailed ? (
           <SmartImage
             url={item.cover}
             mode={imageProxyMode}
             customProxy={customImageProxy}
             alt={item.title}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             onExhausted={() => setImgFailed(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-chip">
-            <svg className="w-8 h-8 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16m10-16v16M3 6a1 1 0 011-1h1a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6zm4 0a1 1 0 011-1h1a1 1 0 011 1v12a1 1 0 01-1 1h-1a1 1 0 01-1-1V6zm8 0a1 1 0 011-1h1a1 1 0 011 1v12a1 1 0 01-1 1h-1a1 1 0 01-1-1V6zm4 0a1 1 0 011-1h1a1 1 0 011 1v12a1 1 0 01-1 1h-1a1 1 0 01-1-1V6z" />
-            </svg>
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center text-faint text-xs px-2 text-center">{item.title}</div>
         )}
+        <div className="poster-sheen absolute inset-0 pointer-events-none" />
         {item.rating && (
-          <span className={cn('absolute top-1.5 right-1.5 tag bg-black/70 text-rating font-medium')}>
-            ★ {item.rating}
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 backdrop-blur px-1.5 py-0.5 text-[11px] font-semibold text-white">
+            <span className="text-rating">★</span> {item.rating}
           </span>
         )}
       </div>
-      <div className="p-2">
-        <div className="text-xs font-medium text-content truncate" title={item.title}>
-          {item.title}
-        </div>
+      <div className="mt-2 px-0.5 text-[13px] text-muted group-hover/card:text-content truncate transition-colors" title={item.title}>
+        {item.title}
       </div>
-    </div>
+    </button>
   );
 }

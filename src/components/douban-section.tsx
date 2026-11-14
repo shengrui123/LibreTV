@@ -21,7 +21,7 @@ export function RecommendSection({ onPick }: { onPick: (title: string) => void }
   if (!doubanEnabled) return null;
   if (recommendSource === 'bangumi') return <BangumiView onPick={onPick} />;
   if (recommendSource === 'hot-list') return <HotListView onPick={onPick} />;
-  return <DoubanView onPick={onPick} />;
+  return <DoubanView onPick={(i) => onPick(i.title)} />;
 }
 
 /**
@@ -29,9 +29,20 @@ export function RecommendSection({ onPick }: { onPick: (title: string) => void }
  * 首批 50 条，滚动接近列表末尾时获取下一批真实数据；分类之间隔离缓存。
  * 空页/完全重复页停止；下一页失败时保留现有卡片，用户可以重试。
  */
-function DoubanView({ onPick }: { onPick: (title: string) => void }) {
-  const [type, setType] = useState<'movie' | 'tv'>('movie');
-  const [tag, setTag] = useState('热门');
+export function DoubanView({
+  onPick,
+  fixedType,
+  initialTag = '热门',
+}: {
+  onPick: (item: DoubanItem) => void;
+  /** 固定类型（电影 / 剧集频道页）：隐藏类型切换 */
+  fixedType?: 'movie' | 'tv';
+  initialTag?: string;
+}) {
+  const [stateType, setType] = useState<'movie' | 'tv'>(fixedType ?? 'movie');
+  const type = fixedType ?? stateType;
+  const [tag, setTag] = useState(initialTag);
+  useEffect(() => setTag(initialTag), [initialTag, fixedType]);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const query = useInfiniteQuery({
@@ -64,7 +75,7 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
 
   return (
     <section aria-label="影视推荐">
-      <div className="flex items-center justify-between mb-3">
+      {!fixedType && <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="flex bg-chip rounded-lg p-0.5">
             <TypeButton active={type === 'movie'} onClick={() => switchType('movie')}>
@@ -75,15 +86,15 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
             </TypeButton>
           </div>
         </div>
-      </div>
+      </div>}
 
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
         {tags.map((t) => (
           <button
             key={t}
             className={cn(
-              'px-2.5 py-1 rounded-full text-xs transition-colors',
-              t === tag ? 'bg-accent text-on-accent' : 'bg-chip text-muted hover:text-content hover:bg-hover'
+              'shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+              t === tag ? 'bg-content text-page' : 'bg-chip text-muted hover:text-content hover:bg-hover'
             )}
             onClick={() => setTag(t)}
           >
@@ -102,9 +113,9 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
       ) : items.length === 0 ? (
         <p className="text-center text-sm text-faint py-8">该分类暂无推荐内容</p>
       ) : (
-        <div data-recommendation-grid className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+        <div data-recommendation-grid className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-x-3 gap-y-5 sm:gap-x-4 sm:gap-y-7">
           {items.map((item) => (
-            <DoubanCard key={item.id} item={item} onClick={() => onPick(item.title)} />
+            <DoubanCard key={item.id} item={item} onClick={() => onPick(item)} />
           ))}
         </div>
       )}
@@ -162,7 +173,7 @@ function BangumiView({ onPick }: { onPick: (title: string) => void }) {
       ) : query.isLoading ? (
         <GridSkeleton />
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-x-3 gap-y-5 sm:gap-x-4 sm:gap-y-7">
           {items.map((item) => (
             <DoubanCard key={item.id} item={item} onClick={() => onPick(item.title)} />
           ))}
@@ -207,7 +218,7 @@ function HotListView({ onPick }: { onPick: (title: string) => void }) {
       ) : query.isLoading ? (
         <GridSkeleton />
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-x-3 gap-y-5 sm:gap-x-4 sm:gap-y-7">
           {items.map((item) => (
             <DoubanCard key={item.id} item={item} onClick={() => onPick(item.title)} />
           ))}
@@ -219,10 +230,10 @@ function HotListView({ onPick }: { onPick: (title: string) => void }) {
 
 function GridSkeleton() {
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-x-3 gap-y-5 sm:gap-x-4 sm:gap-y-7">
       {Array.from({ length: 16 }).map((_, i) => (
         <div key={i}>
-          <div className="aspect-[2/3] rounded-lg bg-chip animate-pulse" />
+          <div className="aspect-[2/3] rounded-[10px] bg-chip animate-pulse" />
           <div className="h-3 mt-2 rounded bg-chip animate-pulse" />
         </div>
       ))}
@@ -234,8 +245,8 @@ function ChipButton({ active, onClick, children }: { active: boolean; onClick: (
   return (
     <button
       className={cn(
-        'px-2.5 py-1 rounded-full text-xs transition-colors',
-        active ? 'bg-accent text-on-accent' : 'bg-chip text-muted hover:text-content hover:bg-hover'
+        'shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+        active ? 'bg-content text-page' : 'bg-chip text-muted hover:text-content hover:bg-hover'
       )}
       onClick={onClick}
     >
@@ -247,7 +258,7 @@ function ChipButton({ active, onClick, children }: { active: boolean; onClick: (
 function TypeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      className={cn('px-3.5 py-1.5 rounded-md text-sm transition-colors', active ? 'bg-accent text-on-accent' : 'text-muted hover:text-content')}
+      className={cn('px-4 py-1.5 rounded-md text-sm font-medium transition-colors', active ? 'bg-content text-page' : 'text-muted hover:text-content')}
       onClick={onClick}
       aria-pressed={active}
     >

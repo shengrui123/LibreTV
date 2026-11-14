@@ -26,6 +26,7 @@ const config: Config = {
           DEFAULT: 'rgb(var(--c-accent) / <alpha-value>)',
           hover: 'rgb(var(--c-accent-hover) / <alpha-value>)',
         },
+        brand: 'rgb(var(--c-brand) / <alpha-value>)',
         // 语义状态色：随亮/暗主题切换，替代直接使用 red/green/amber 等调色板
         danger: {
           DEFAULT: 'rgb(var(--c-danger) / <alpha-value>)',
