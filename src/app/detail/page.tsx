@@ -74,7 +74,7 @@ function RecommendationDetail({ item }: { item: DoubanItem }) {
           </div>
         </div>
       </div>
-      <div className="grid sm:grid-cols-[1fr_220px] gap-6 mt-8">
+      <div className="glass glass-thick rounded-3xl p-6 sm:p-8 grid sm:grid-cols-[1fr_220px] gap-6 mt-6">
         <div>
           {rating && <p className="mb-4 text-xl font-bold">豆瓣 {rating}</p>}
           {a?.intro && <p className="leading-relaxed whitespace-pre-wrap">{a.intro}</p>}
@@ -116,11 +116,11 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName }: { 
   };
   return (
     <article>
-      <div className="flex gap-5 sm:gap-8 items-start">
+      <div className="glass glass-thick rounded-3xl p-5 sm:p-8 flex gap-5 sm:gap-8 items-start">
         {(cover || info?.cover) && <Cover url={cover || info?.cover} alt={title} eager className="w-28 sm:w-48 aspect-[2/3] object-cover rounded-xl shrink-0" />}
         <div className="min-w-0"><h1 className="text-3xl sm:text-5xl font-bold break-words">{title}</h1><p className="mt-3 text-muted">{meta}</p><p className="mt-2 text-sm text-faint">{source?.name || sourceName}</p>{info?.director && <p className="mt-2 text-sm text-muted">导演 {info.director}</p>}{info?.actor && <p className="mt-2 text-sm text-muted">主演 {info.actor}</p>}{info?.desc && <p className="mt-5 text-sm leading-relaxed whitespace-pre-wrap">{info.desc}</p>}</div>
       </div>
-      <div className="mt-8">
+      <div className="glass glass-thick rounded-3xl p-5 sm:p-8 mt-5">
         {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length ? <>
           <div className="flex flex-wrap justify-between items-center gap-3 mb-4"><h2 className="text-xl font-bold">剧集 · {episodes.length} 集</h2><div className="flex gap-2"><button className="btn-ghost btn-sm" onClick={() => setReversed(!reversed)}>{reversed ? '正序排列' : '倒序排列'}</button><button className="btn-ghost btn-sm" onClick={async () => toast(await copyToClipboard(episodes.join('\n')) ? '播放链接已复制' : '复制失败，请检查浏览器权限')}>复制链接</button></div></div>
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">{episodes.map((_, i) => reversed ? episodes.length - 1 - i : i).map((index) => <button key={index} className="btn-ghost btn-sm" onClick={() => play(index)}>{index + 1}</button>)}</div>

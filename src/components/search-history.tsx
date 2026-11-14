@@ -119,14 +119,7 @@ export function useSearchHistory(input: string) {
   };
 }
 
-/**
- * 最近搜索浮层：紧贴输入框下方，与输入框「拼成同一个面板」。
- * - 不留间隙、不画上边框、上角为直角：上圆角与上边框由输入框容器补齐，
- *   因此接缝处既不会出现缝隙，也不会出现双线；
- * - 外框取 accent 色，与输入框的聚焦边框同色，避免拼接处「上半蓝、下半灰」断色；
- * - 左右内边距与输入框文字（pl-4）对齐，使下拉文字与输入内容在同一条竖线上；
- * - 作为浮层不占文档流，出现/消失不会引起下方内容跳动。
- */
+/** 最近搜索浮层：独立的圆角玻璃面板，和搜索框保持轻微间距。 */
 export function SearchHistoryDropdown({
   id,
   matches,
@@ -146,11 +139,11 @@ export function SearchHistoryDropdown({
   return (
     <div
       className={cn(
-        'absolute left-0 right-0 top-full z-40 overflow-hidden text-left',
-        'rounded-b-xl border-x border-b border-accent bg-surface-raised shadow-2xl animate-fade-in'
+        'glass glass-thick absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden text-left',
+        'rounded-2xl text-content animate-fade-in'
       )}
     >
-      <div className="flex items-center justify-between pl-4 pr-2 py-2 border-b border-line">
+      <div className="flex items-center justify-between pl-4 pr-2 py-2.5 border-b border-line/70">
         <span className="flex items-center gap-1.5 text-xs text-faint">
           <Icon name="clock" className="w-3.5 h-3.5" />
           最近搜索
@@ -175,18 +168,18 @@ export function SearchHistoryDropdown({
             id={`${id}-${i}`}
             role="option"
             aria-selected={i === activeIndex}
-            className={cn('flex items-center hover:bg-hover', i === activeIndex && 'bg-hover')}
+            className={cn('mx-1.5 flex items-center rounded-xl transition-colors hover:bg-hover', i === activeIndex && 'bg-hover')}
           >
             <button
               type="button"
-              className="flex-1 min-w-0 pl-4 pr-2 py-2.5 text-left text-sm text-content truncate"
+              className="flex-1 min-w-0 pl-2.5 pr-2 py-2.5 text-left text-sm text-content truncate"
               onClick={() => onPick(h.text)}
             >
               {h.text}
             </button>
             <button
               type="button"
-              className="shrink-0 p-1.5 mr-2 rounded-md text-faint hover:text-danger hover:bg-chip transition-colors"
+              className="shrink-0 p-2 mr-1 rounded-full text-muted hover:text-danger hover:bg-hover transition-colors"
               aria-label={`删除搜索记录 ${h.text}`}
               onClick={() => onRemove(h.text)}
             >

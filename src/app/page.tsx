@@ -13,7 +13,7 @@ import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled 
 import { api } from '@/lib/client-api';
 import type { DoubanItem, SourceSearchOutcome } from '@/lib/types';
 import { SearchHistoryDropdown, useSearchHistory } from '@/components/search-history';
-import { cn, formatDisableTtl, validateSourceUrl } from '@/lib/utils';
+import { formatDisableTtl, validateSourceUrl } from '@/lib/utils';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/states';
 import { Icon } from '@/components/icon';
@@ -239,22 +239,8 @@ function HomeContent() {
                 runSearch(input);
               }}
             >
-              {/* 输入框与搜索按钮合并为一个胶囊：内部无边框，焦点态由容器统一表达；
-                  下拉展开时改为「上圆下直」并隐去底边，与下方浮层拼成同一个面板 */}
-              <div
-                className={cn(
-                  // 12px 圆角矩形（非胶囊）：收起态与展开态共用同一组上圆角，
-                  // 展开时输入框这部分形状完全不发生变化，上下圆角也与下拉保持一致；
-                  // 右侧与上下不留内边距，由搜索按钮拉伸填满、与搜索框边缘贴合
-                  'flex items-stretch min-h-[52px] pl-4 border',
-                  'transition-[background-color,border-color,border-radius] duration-200',
-                  searchHistory.visible
-                    ? // 展开时：外框（含上圆角）沿用输入框的聚焦样式不变，只把底边改为内部分隔线，
-                      // 使输入区在展开状态下仍是边界清晰的独立输入框，而非与列表糊成一片
-                      'rounded-t-xl rounded-b-none border-accent border-b-line bg-surface-raised'
-                    : 'glass rounded-2xl border-transparent focus-within:ring-2 focus-within:ring-accent/40'
-                )}
-              >
+              {/* 搜索输入与浮层使用同一套圆角玻璃材质。 */}
+              <div className="glass rounded-2xl flex items-stretch min-h-[52px] pl-4 border border-transparent focus-within:ring-2 focus-within:ring-accent/40 transition-[box-shadow] duration-200">
                 <Icon name="search" className="w-5 h-5 self-center mr-2.5 text-faint shrink-0" />
                 <input
                   ref={inputRef}
@@ -294,22 +280,16 @@ function HomeContent() {
                     <Icon name="close" className="w-4 h-4" />
                   </button>
                 )}
-                {/* 主操作按钮：贴合搜索框右端——右侧圆角跟随容器、左侧直角，展开时右下角
-                    跟着容器一起改直角；按压改用亮度反馈（缩放会让贴合边缘露出缝隙） */}
                 <button
                   type="submit"
-                  className={cn(
-                    'btn-primary shrink-0 px-5 font-semibold transition-[background-color,filter] active:brightness-90 active:!scale-100',
-                    '!rounded-l-none',
-                    searchHistory.visible ? '!rounded-tr-xl !rounded-br-none' : '!rounded-r-2xl'
-                  )}
+                  className="btn-primary shrink-0 px-5 font-semibold transition-[background-color,filter] active:brightness-90 active:!scale-100 !rounded-l-none !rounded-r-2xl"
                 >
                   搜索
                 </button>
               </div>
             </form>
 
-            {/* 最近搜索：与输入框无缝拼接；浮层不占文档流，出现/消失不会顶动下方内容 */}
+            {/* 最近搜索浮层不占文档流。 */}
             {searchHistory.visible && (
               <SearchHistoryDropdown
                 id="home-search-history"

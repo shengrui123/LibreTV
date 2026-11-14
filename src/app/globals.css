@@ -151,6 +151,10 @@ body {
     -webkit-mask-composite: xor;
     mask-composite: exclude;
   }
+  /* 无背景模糊支持时保持面板可读。 */
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .glass { background: rgb(var(--c-surface-raised) / .96); }
+  }
   .glass-clear {
     --glass-alpha: var(--glass-alpha-clear);
     --glass-blur: 18px;
@@ -168,7 +172,7 @@ body {
     @apply btn glass text-content/90 hover:text-content hover:brightness-110;
   }
   .input {
-    @apply bg-chip border border-transparent rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint;
+    @apply bg-chip border border-line/50 rounded-xl px-3 py-2 text-sm text-content placeholder:text-faint transition-colors;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent;
   }
   .tag {

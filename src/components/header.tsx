@@ -207,7 +207,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
                   />
                 </div>
                 {searchOpen && searchHistory.visible && (
-                  <div className="absolute right-0 top-full mt-2 w-72 text-content">
+                  <div className="absolute right-0 top-full w-72 text-content">
                     <SearchHistoryDropdown
                       id="header-search-history"
                       matches={searchHistory.matches}
@@ -235,18 +235,19 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
         />
         <aside
           aria-label="侧边栏"
+          inert={!sidebarOpen}
           className={cn(
-            'glass glass-thick absolute left-3 top-3 bottom-3 w-[280px] rounded-[28px] p-3 flex flex-col text-content',
+            'glass absolute left-3 top-3 bottom-3 w-[min(280px,calc(100vw_-_24px))] rounded-[28px] p-3 flex min-h-0 flex-col text-content [--glass-alpha:.62] [--glass-blur:36px] dark:[--glass-alpha:.72]',
             'transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
-            sidebarOpen ? 'translate-x-0' : '-translate-x-[calc(100%+24px)]'
+            sidebarOpen ? 'translate-x-0' : '-translate-x-[calc(100%_+_24px)]'
           )}
         >
-          <div className="flex items-center justify-between px-2 pt-1 pb-3">
+          <div className="flex shrink-0 items-center justify-between px-2 pt-1 pb-3">
             <span className="text-xl font-extrabold tracking-tight">
               Libre<span className="text-brand">TV</span>
             </span>
             <button
-              className="w-9 h-9 grid place-items-center rounded-full hover:bg-hover"
+              className="glass glass-clear w-9 h-9 grid place-items-center rounded-full transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               aria-label="关闭侧边栏"
               tabIndex={sidebarOpen ? 0 : -1}
               onClick={() => setSidebarOpen(false)}
@@ -254,22 +255,24 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
               <SidebarIcon />
             </button>
           </div>
-          <nav className="flex flex-col gap-0.5">
-            <SideLink href="/" icon="home" active={active === 'home'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>首页</SideLink>
-            <SideLink href="/?search=1" icon="search" active={active === 'search'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>搜索</SideLink>
-            <SideLink href="/?browse=movie" icon="film" active={active === 'movie'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>电影</SideLink>
-            <SideLink href="/?browse=tv" icon="tv" active={active === 'tv'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>剧集</SideLink>
-            <SideLink href="/live" icon="bolt" active={active === 'live'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>直播</SideLink>
-          </nav>
-          <div className="my-3 mx-2 h-px bg-line" />
-          <div className="flex flex-col gap-0.5">
-            <span className="px-3 pb-1 text-xs font-medium text-muted">更多</span>
-            <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setHistoryOpen(true); }}>观看历史</SideAction>
-            <SideAction icon="download" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); requestShowDownloadManager(); }}>下载管理</SideAction>
-            <SideAction icon="gear" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setSettingsOpen(true); }}>设置</SideAction>
-            <SideLink href="/about" icon="info" active={active === 'about'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>关于</SideLink>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin">
+            <nav aria-label="主导航" className="flex flex-col gap-1">
+              <SideLink href="/" icon="home" active={active === 'home'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>首页</SideLink>
+              <SideLink href="/?search=1" icon="search" active={active === 'search'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>搜索</SideLink>
+              <SideLink href="/?browse=movie" icon="film" active={active === 'movie'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>电影</SideLink>
+              <SideLink href="/?browse=tv" icon="tv" active={active === 'tv'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>剧集</SideLink>
+              <SideLink href="/live" icon="bolt" active={active === 'live'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>直播</SideLink>
+            </nav>
+            <div className="my-3 mx-2 h-px bg-line" />
+            <div className="flex flex-col gap-0.5">
+              <span className="px-3 pb-1 text-xs font-medium text-muted">更多</span>
+              <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setHistoryOpen(true); }}>观看历史</SideAction>
+              <SideAction icon="download" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); requestShowDownloadManager(); }}>下载管理</SideAction>
+              <SideAction icon="gear" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setSettingsOpen(true); }}>设置</SideAction>
+              <SideLink href="/about" icon="info" active={active === 'about'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>关于</SideLink>
+            </div>
           </div>
-          <div className="mt-auto flex items-center justify-between rounded-2xl bg-chip px-3 py-2">
+          <div className="glass glass-clear mt-3 flex shrink-0 items-center justify-between rounded-2xl px-3 py-2">
             <span className="text-xs text-muted">外观</span>
             <ThemeToggle />
           </div>
@@ -360,8 +363,9 @@ function SideLink({
       href={href}
       onClick={onNavigate}
       tabIndex={tab ? 0 : -1}
+      aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-medium transition-colors',
+        'flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent',
         active ? 'glass-pill-active text-content' : 'text-muted hover:bg-hover hover:text-content'
       )}
     >
@@ -377,7 +381,7 @@ function SideAction({ icon, onClick, tab, children }: { icon: IconName; onClick:
       type="button"
       onClick={onClick}
       tabIndex={tab ? 0 : -1}
-      className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-medium text-muted hover:bg-hover hover:text-content transition-colors text-left"
+      className="flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-[15px] font-medium text-muted transition-colors hover:bg-hover hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
     >
       <Icon name={icon} className="w-5 h-5 shrink-0" />
       {children}
