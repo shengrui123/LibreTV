@@ -275,8 +275,8 @@ function WatchContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="glass glass-thick sticky top-0 z-40 border-b border-line">
+    <div className="dark min-h-screen flex flex-col text-content bg-[#080809] [background-image:radial-gradient(ellipse_70%_40%_at_50%_4%,rgba(137,92,50,0.16),transparent_70%),linear-gradient(180deg,#13110f_0%,#080809_48%,#050506_100%)]">
+      <header className="glass glass-thick sticky top-0 z-40 border-b border-white/10 [--glass-tint:20_19_19] [--glass-alpha:.78]">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-1.5 sm:gap-3">
           <BackButton />
           <HomeButton />
@@ -314,10 +314,11 @@ function WatchContent() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
-          <div>
-            <div ref={playerFrameRef} className="aspect-video bg-black rounded-2xl overflow-hidden">
+      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-10 pt-6 sm:pt-9 pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:gap-8 items-start">
+          <div className="min-w-0">
+            <div className="relative rounded-[20px] p-1 sm:p-1.5 bg-gradient-to-b from-white/20 via-white/5 to-[#9d7445]/20 shadow-[0_24px_80px_rgba(0,0,0,0.8),0_0_50px_rgba(185,128,64,0.09)]">
+            <div ref={playerFrameRef} className="aspect-video bg-black rounded-[16px] overflow-hidden">
               {currentUrl ? (
                 <PlayerShell
                   url={currentUrl}
@@ -364,8 +365,10 @@ function WatchContent() {
               )}
             </div>
 
+            </div>
+
             {/* 操作栏 */}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="flex flex-wrap items-center gap-2 mt-5 px-1">
               <button
                 className="btn-ghost btn-sm"
                 disabled={currentIndex <= 0}
@@ -429,7 +432,7 @@ function WatchContent() {
           </div>
 
           {/* 剧集侧栏 */}
-          <aside className="glass glass-thick rounded-2xl p-4 h-fit">
+          <aside className="glass glass-thick rounded-[22px] p-5 h-fit [--glass-tint:30_28_26] [--glass-alpha:.65] [--glass-sheen:.06] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
             <div className="flex items-center justify-between gap-2 mb-2.5">
               <h2 className="text-sm font-semibold text-content">
                 剧集列表{episodes.length > 0 && `（${episodes.length}）`}
@@ -499,7 +502,7 @@ function EpisodeButton({ index, active, onClick }: { index: number; active: bool
   return (
     <button
       ref={ref}
-      className={cn('btn btn-sm !px-1', active ? 'episode-active' : 'btn-ghost')}
+      className={cn('btn btn-sm !px-1 min-h-9', active ? 'bg-[#e7d0a5] text-[#21180e] font-semibold shadow-[0_0_20px_rgba(231,208,165,0.2)]' : 'btn-ghost')}
       onClick={onClick}
     >
       {index + 1}
