@@ -18,7 +18,7 @@ import { formatRemarks } from '@/lib/remarks';
 import { addSearchHistory } from '@/lib/db';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/components/toast';
-import type { DoubanItem } from '@/lib/types';
+import type { DoubanItem, SourceConfig, SearchResultItem, VideoDetail } from '@/lib/types';
 
 export default function DetailPage() {
   return <Suspense><DetailContent /></Suspense>;
@@ -149,6 +149,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         </div>
       </DetailHero>
       <div className="space-y-10 pt-8 sm:pt-10">
+        {(item.isTv || !!a?.episodes) && <RecommendedEpisodes title={item.title} cover={item.cover} />}
         {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
         {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <button key={`${url}-${i}`} type="button" onClick={() => { setStillIndex(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label={`查看第 ${i + 1} 张剧照`} aria-pressed={i === stillIndex} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></button>)}</div></section>}
@@ -158,6 +159,57 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
       </div>
     </article>
   );
+}
+
+type ResolvedSeries = { item: SearchResultItem; source: SourceConfig; detail: VideoDetail };
+
+function RecommendedEpisodes({ title, cover }: { title: string; cover?: string }) {
+  const state = useAppStore();
+  const router = useRouter();
+  const { verified } = useAuth();
+  const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
+  useEffect(() => {
+    const unsubscribe = useAppStore.persist.onFinishHydration(() => setHydrated(true));
+    if (useAppStore.persist.hasHydrated()) setHydrated(true);
+    return unsubscribe;
+  }, []);
+  const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
+  const query = useQuery({
+    queryKey: ['series-episodes', title, sources.map((s) => [s.key, s.url, s.detail]), state.yellowFilter],
+    enabled: hydrated && !!verified && sources.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async ({ signal }): Promise<ResolvedSeries | null> => {
+      const result = await api.search(title, sources, state.yellowFilter, { signal });
+      const matches = result.list.filter((item) => item.name.trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase());
+      const candidates = await Promise.all(matches.map(async (item) => {
+        const source = sources.find((entry) => entry.key === item.sourceKey);
+        if (!source) return null;
+        const probe = await api.detailSpeed(item.vodId, source, signal);
+        return probe.ok && probe.detail?.episodes.length ? { item, source, detail: probe.detail, ms: probe.ms } : null;
+      }));
+      return candidates.filter((item): item is NonNullable<typeof item> => item !== null).sort((a, b) => a.ms - b.ms)[0] ?? null;
+    },
+  });
+  if (!hydrated || !verified) return null;
+  if (!sources.length) return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">添加并启用点播源后可查看剧集。</p></section>;
+  if (query.isLoading) return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p role="status" className="mt-3 text-sm text-muted">正在查找剧集…</p></section>;
+  if (query.isError || !query.data) return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">未找到可播放的同名剧集。</p><button type="button" className="btn-ghost btn-sm mt-3" onClick={() => void query.refetch()}>重新查找</button></section>;
+  const { item, source, detail } = query.data;
+  return <EpisodeRow count={detail.episodes.length} title={title} cover={cover} sourceName={source.name} onPlay={(index) => { void addSearchHistory(title).catch(() => {}); router.push(buildWatchUrl({ sourceKey: source.key, vodId: item.vodId, index, title, sourceUrl: source.url, detail: source.detail })); }} />;
+}
+
+function EpisodeRow({ count, title, cover, sourceName, onPlay, reversed = false, onReverse, onCopy }: { count: number; title: string; cover?: string; sourceName?: string; onPlay: (index: number) => void; reversed?: boolean; onReverse?: () => void; onCopy?: () => void }) {
+  return <section aria-label="剧集列表">
+    <div className="px-4 sm:px-8 lg:px-12 flex flex-wrap items-center gap-3"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><span className="text-sm text-muted">共 {count} 集{sourceName ? ` · ${sourceName}` : ''}</span>{onReverse && <button className="btn-ghost btn-sm ml-auto" onClick={onReverse}>{reversed ? '正序排列' : '倒序排列'}</button>}{onCopy && <button className="btn-ghost btn-sm" onClick={onCopy}>复制链接</button>}</div>
+    <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">
+      {Array.from({ length: count }, (_, i) => reversed ? count - 1 - i : i).map((index) => <button key={index} type="button" onClick={() => onPlay(index)} aria-label={`播放${title}第 ${index + 1} 集`} className="relative shrink-0 w-[70%] sm:w-[36%] lg:w-[25%] aspect-[16/10] rounded-2xl overflow-hidden bg-chip snap-start text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent group">
+        {cover && <Cover url={cover} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm scale-110" />}
+        <span className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-black/10" />
+        <span className="absolute left-4 right-4 bottom-4 text-white"><span className="block text-xs text-white/70">{title}</span><span className="block mt-1 text-lg font-semibold">第 {index + 1} 集</span><span className="block mt-1 text-xs text-white/70 group-hover:text-white">点击播放</span></span>
+      </button>)}
+    </div>
+  </section>;
 }
 
 function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBack }: { id: string; title: string; cover: string; sourceKey: string; sourceUrl: string; sourceName: string; onBack: () => void }) {
@@ -198,8 +250,9 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
           <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => play(0)}><Icon name="play" className="w-4 h-4" /> 播放</button>}<ShareButton title={title} /></div>
         </div>
       </DetailHero>
+      {episodes.length > 1 && <div className="pt-8 sm:pt-10"><EpisodeRow count={episodes.length} title={title} cover={cover || info?.cover} sourceName={source?.name || sourceName} onPlay={play} reversed={reversed} onReverse={() => setReversed(!reversed)} onCopy={() => { void copyToClipboard(episodes.join('\n')).then((ok) => toast(ok ? '播放链接已复制' : '复制失败，请检查浏览器权限')); }} /></div>}
       <div className="px-4 sm:px-8 lg:px-12 pt-8 sm:pt-10 max-w-[1680px] mx-auto">
-        {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length ? <section>
+        {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length > 1 ? null : detail && episodes.length ? <section>
           <div className="flex flex-wrap justify-between items-center gap-3 mb-4"><h2 className="text-xl sm:text-2xl font-bold">剧集 · {episodes.length} 集</h2><div className="flex gap-2"><button className="btn-ghost btn-sm" onClick={() => setReversed(!reversed)}>{reversed ? '正序排列' : '倒序排列'}</button><button className="btn-ghost btn-sm" onClick={async () => toast(await copyToClipboard(episodes.join('\n')) ? '播放链接已复制' : '复制失败，请检查浏览器权限')}>复制链接</button></div></div>
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">{episodes.map((_, i) => reversed ? episodes.length - 1 - i : i).map((index) => <button key={index} className="btn-ghost btn-sm" onClick={() => play(index)}>{index + 1}</button>)}</div>
         </section> : detail ? <EmptyState icon="alert" title="未找到播放资源" description="请尝试其他视频" /> : null}
