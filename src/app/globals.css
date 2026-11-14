@@ -265,14 +265,10 @@ body {
   body.has-tabbar { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 
-/* Hero 标题暖色渐变（参考图的橙红标题） */
+/* 无宣传标题图时使用清晰、中性的文字，与不同影片画面协调。 */
 .hero-title {
-  background: linear-gradient(180deg, #ffd27a 0%, #ff8a3d 55%, #ff5a2c 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  filter: drop-shadow(0 4px 18px rgba(0,0,0,.45));
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .65);
 }
 
 /* 行数截断 */
