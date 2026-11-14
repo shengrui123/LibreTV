@@ -90,8 +90,14 @@ export function parseDetail(
   if (episodes.length === 0) {
     episodes = extractM3u8FromText(String(vod.vod_content ?? ''));
   }
+  const episodeGroups = String(vod.vod_play_url ?? '').split('$$$').map((group) => group.split('#').flatMap((entry) => {
+    const parts = entry.split('$');
+    return parts.length > 1 && /^https?:\/\//.test(parts[1]) ? [{ name: parts[0], url: parts[1] }] : [];
+  }));
+  const selected = episodeGroups.find((group) => group.length === episodes.length && group.every((entry, i) => entry.url === episodes[i]));
   return {
     episodes,
+    episodeNames: selected?.map((entry) => entry.name),
     videoInfo: {
       title: str(vod.vod_name),
       cover: str(vod.vod_pic),
