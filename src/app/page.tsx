@@ -240,7 +240,7 @@ function HomeContent() {
               }}
             >
               {/* 搜索输入与浮层使用同一套圆角玻璃材质。 */}
-              <div className="glass rounded-2xl flex items-stretch min-h-[52px] pl-4 border border-transparent focus-within:ring-2 focus-within:ring-accent/40 transition-[box-shadow] duration-200">
+              <div className="glass glass-clear rounded-full flex items-center min-h-[56px] pl-5 pr-1.5 py-1.5 focus-within:ring-2 focus-within:ring-content/20 transition-[box-shadow] duration-200">
                 <Icon name="search" className="w-5 h-5 self-center mr-2.5 text-faint shrink-0" />
                 <input
                   ref={inputRef}
@@ -282,7 +282,7 @@ function HomeContent() {
                 )}
                 <button
                   type="submit"
-                  className="btn-primary shrink-0 px-5 font-semibold transition-[background-color,filter] active:brightness-90 active:!scale-100 !rounded-l-none !rounded-r-2xl"
+                  className="btn glass glass-clear shrink-0 self-stretch px-6 text-content font-semibold hover:brightness-110 active:scale-95"
                 >
                   搜索
                 </button>
