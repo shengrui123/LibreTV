@@ -128,7 +128,7 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
           )}
         >
           <div className="pointer-events-auto flex items-center gap-2.5">
-            {searchPage ? (
+            {searchPage || (pathname === '/' && (browse === 'movie' || browse === 'tv')) ? (
               <GlassCircle label="返回首页" dark={onImage} onClick={() => router.push('/')}>
                 <Icon name="chevronLeft" className="w-5 h-5" />
               </GlassCircle>
