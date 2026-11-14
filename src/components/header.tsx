@@ -127,11 +127,6 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
             <GlassCircle label="打开侧边栏" dark={onImage} onClick={() => setSidebarOpen(true)}>
               <SidebarIcon />
             </GlassCircle>
-            <Link href="/" aria-label="LibreTV 首页" className="hidden sm:flex items-center gap-1.5">
-              <span className="text-[18px] font-extrabold tracking-tight [text-shadow:0_1px_8px_rgba(0,0,0,.25)]">
-                Libre<span className="text-brand">TV</span>
-              </span>
-            </Link>
           </div>
 
           <div className="flex-1" />

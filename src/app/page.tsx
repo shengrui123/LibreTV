@@ -17,7 +17,6 @@ import { cn, formatDisableTtl, validateSourceUrl } from '@/lib/utils';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/states';
 import { Icon } from '@/components/icon';
-import { SiteFooter } from '@/components/site-footer';
 
 /**
  * 首页：搜索（URL ?s= 驱动，可后退/分享）+ 豆瓣推荐。
@@ -207,7 +206,6 @@ function HomeContent() {
           <DoubanRow title="冷门佳片" type="movie" tag="冷门佳片" href="/?browse=movie&tag=%E5%86%B7%E9%97%A8%E4%BD%B3%E7%89%87" onOpen={openPreview} />
           <DoubanRow title="纪录片" type="tv" tag="纪录片" href="/?browse=tv&tag=%E7%BA%AA%E5%BD%95%E7%89%87" onOpen={openPreview} />
         </main>
-        <SiteFooter />
         <PreviewModal item={previewItem} onClose={closePreview} onPlay={playItem} />
       </div>
     );
@@ -224,7 +222,6 @@ function HomeContent() {
           </h1>
           <DoubanView key={browseType} fixedType={browseType} initialTag={browseTag} onPick={openPreview} />
         </main>
-        <SiteFooter />
         <PreviewModal item={previewItem} onClose={closePreview} onPlay={playItem} />
       </div>
     );
@@ -416,8 +413,6 @@ function HomeContent() {
         )}
 
       </main>
-
-      <SiteFooter />
 
       <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
     </div>
