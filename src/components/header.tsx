@@ -11,7 +11,6 @@ import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
 
 const SourceManagerDrawer = dynamic(() => import('./source-manager').then((mod) => mod.SourceManagerDrawer));
-const HistoryPanel = dynamic(() => import('./history-panel').then((mod) => mod.HistoryPanel));
 
 type NavKey = 'home' | 'movie' | 'tv' | 'live' | 'about' | 'search';
 
@@ -34,13 +33,10 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // 首次打开时加载面板；之后保留挂载，让关闭过渡和面板状态正常工作。
   useEffect(() => { if (settingsOpen) setSettingsLoaded(true); }, [settingsOpen]);
-  useEffect(() => { if (historyOpen) setHistoryLoaded(true); }, [historyOpen]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(showSearch);
   const [scrolled, setScrolled] = useState(false);
@@ -265,7 +261,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
             <div className="my-3 mx-2 h-px bg-line" />
             <div className="flex flex-col gap-0.5">
               <span className="px-3 pb-1 text-xs font-medium text-muted">更多</span>
-              <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setHistoryOpen(true); }}>观看历史</SideAction>
+              <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); router.push('/history'); }}>观看历史</SideAction>
               <SideAction icon="download" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); requestShowDownloadManager(); }}>下载管理</SideAction>
               <SideAction icon="gear" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setSettingsOpen(true); }}>设置</SideAction>
               <SideLink href="/about" icon="info" active={active === 'about'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>关于</SideLink>
@@ -289,7 +285,7 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
           <TabItem href="/?browse=tv" icon="tv" active={active === 'tv'}>剧集</TabItem>
           <button
             type="button"
-            onClick={() => setHistoryOpen(true)}
+            onClick={() => router.push('/history')}
             className="flex flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-medium text-muted"
           >
             <Icon name="clock" className="w-[22px] h-[22px]" />
@@ -299,7 +295,6 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
       </nav>
 
       {(settingsOpen || settingsLoaded) && <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
-      {(historyOpen || historyLoaded) && <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />}
     </>
   );
 }
