@@ -289,6 +289,22 @@ function RecommendedEpisodes({ title, cover, count, onPlay }: { title: string; c
   const episodeCount = Number(count);
   const { verified } = useAuth();
   const keys = useAppStore((state) => state.selectedKeys);
+  const router = useRouter();
+  const seasonBase = title.replace(/\s*(?:第[一二三四五六七八九十百零〇0-9]+季|[Ss]eason\s*\d+)\s*$/, '').trim();
+  const seasons = useQuery({
+    queryKey: ['recommendation-seasons', seasonBase, keys],
+    enabled: !!verified && !!seasonBase && keys.length > 0,
+    staleTime: 5 * 60_000, retry: false,
+    queryFn: async ({ signal }) => {
+      const state = useAppStore.getState();
+      const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
+      if (!sources.length) return [];
+      const result = await api.search(seasonBase, sources, state.yellowFilter, { signal });
+      const base = normalizeTitle(seasonBase);
+      const suffix = /^(?:第[一二三四五六七八九十百零〇0-9]+季|season\d+)$/;
+      return result.list.filter((entry) => { const name = normalizeTitle(entry.name); return name === base || (name.startsWith(base) && suffix.test(name.slice(base.length))); }).filter((entry, i, all) => all.findIndex((other) => normalizeTitle(other.name) === normalizeTitle(entry.name)) === i);
+    },
+  });
   const episodes = useQuery({
     queryKey: ['episode-metadata', title, episodeCount, keys],
     enabled: !!verified && Number.isInteger(episodeCount) && episodeCount > 0 && episodeCount <= 500 && keys.length > 0,
@@ -317,7 +333,7 @@ function RecommendedEpisodes({ title, cover, count, onPlay }: { title: string; c
   if (!Number.isInteger(episodeCount) || episodeCount < 1 || episodeCount > 500) {
     return <section className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold">剧集</h2><p className="mt-3 text-sm text-muted">暂无分集资料。</p></section>;
   }
-  return <EpisodeRow count={episodeCount} title={title} cover={cover} names={episodes.data?.map((entry) => entry?.name || '')} urls={episodes.data?.map((entry) => entry?.url || '')} onPlay={(index) => onPlay(index, episodes.data?.[index]?.name)} />;
+  return <>{!!seasons.data?.length && <section className="px-4 sm:px-8 lg:px-12"><div className="flex gap-2 overflow-x-auto no-scrollbar" aria-label="选择季数"><button type="button" aria-current="true" className="btn-hero shrink-0">{title.slice(seasonBase.length).trim() || '当前季'}</button>{seasons.data.filter((entry) => normalizeTitle(entry.name) !== normalizeTitle(title)).map((entry) => <button key={`${entry.sourceKey}-${entry.vodId}`} type="button" className="btn-ghost shrink-0" onClick={() => router.push(buildSourceDetailUrl(entry, window.location.pathname + window.location.search))}>{entry.name.slice(seasonBase.length).trim() || '原系列'}</button>)}</div></section>}<EpisodeRow count={episodeCount} title={title} cover={cover} names={episodes.data?.map((entry) => entry?.name || '')} urls={episodes.data?.map((entry) => entry?.url || '')} onPlay={(index) => onPlay(index, episodes.data?.[index]?.name)} /></>;
 }
 
 function EpisodeRow({ count, title, cover, sourceName, names, urls, onPlay, reversed = false, onReverse, onCopy }: { count: number; title: string; cover?: string; sourceName?: string; names?: string[]; urls?: string[]; onPlay: (index: number) => void; reversed?: boolean; onReverse?: () => void; onCopy?: () => void }) {
@@ -378,7 +394,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
   const meta = [info?.typeName, info?.year, info?.area, formatRemarks(info?.remarks)].filter(Boolean).join(' · ');
   const seasons = useQuery({
     queryKey: ['source-seasons', seasonBase, store.selectedKeys, store.yellowFilter],
-    enabled: hydrated && !!verified && !!seasonBase && seasonBase !== title,
+    enabled: hydrated && !!verified && !!seasonBase,
     staleTime: 5 * 60_000, retry: false,
     queryFn: async ({ signal }) => {
       const sources = [...new Set(store.selectedKeys)].map((key) => resolveSource(store, key)).filter((entry): entry is SourceConfig => !!entry && validateSourceUrl(entry.url) && !isSourceDisabled(store, entry.key) && !isInDisabledSubscription(store, entry.key));
@@ -432,7 +448,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
           <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => void play(0)} disabled={playingSource}><Icon name="play" className="w-4 h-4" /> {playingSource ? '正在查找播放源…' : '立即播放'}</button>}<ShareButton title={title} /></div>
         </div>
       </DetailHero>
-      {!!seasons.data?.length && <section className="px-4 sm:px-8 lg:px-12 pt-8"><h2 className="text-lg font-semibold mb-3">全部季</h2><div className="flex gap-2 overflow-x-auto no-scrollbar">{seasons.data.map((entry) => <button key={entry.name} type="button" aria-pressed={entry.name === title} className={entry.name === title ? 'btn-hero shrink-0' : 'btn-ghost shrink-0'} onClick={() => router.push(buildSourceDetailUrl(entry, params.get('returnTo') || '/'))}>{entry.name.slice(seasonBase.length).trim()}</button>)}</div></section>}
+      {!!seasons.data?.length && <section className="px-4 sm:px-8 lg:px-12 pt-8"><h2 className="text-lg font-semibold mb-3">全部季</h2><div className="flex gap-2 overflow-x-auto no-scrollbar">{!seasons.data.some((entry) => normalizeTitle(entry.name) === normalizeTitle(title)) && <button type="button" aria-current="true" className="btn-hero shrink-0">{title.slice(seasonBase.length).trim() || '当前季'}</button>}{seasons.data.map((entry) => <button key={entry.name} type="button" aria-pressed={entry.name === title} className={entry.name === title ? 'btn-hero shrink-0' : 'btn-ghost shrink-0'} onClick={() => router.push(buildSourceDetailUrl(entry, params.get('returnTo') || '/'))}>{entry.name.slice(seasonBase.length).trim()}</button>)}</div></section>}
       {episodes.length > 1 && <div className="pt-8 sm:pt-10"><EpisodeRow count={episodes.length} title={title} cover={cover || info?.cover} sourceName={source?.name || sourceName} names={detail?.episodeNames} urls={episodes} onPlay={(index) => { void play(index); }} reversed={reversed} onReverse={() => setReversed(!reversed)} onCopy={() => { void copyToClipboard(episodes.join('\n')).then((ok) => toast(ok ? '播放链接已复制' : '复制失败，请检查浏览器权限')); }} /></div>}
       <div className="px-4 sm:px-8 lg:px-12 pt-8 sm:pt-10 max-w-[1680px] mx-auto">
         {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length > 1 ? null : detail && episodes.length ? <section>

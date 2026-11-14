@@ -63,6 +63,15 @@ function WatchContent() {
   const indexParam = parseInt(searchParams.get('index') || '0', 10) || 0;
 
   const [reversed, setReversed] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealControls = () => {
+    setControlsVisible(true);
+    if (controlsTimer.current) clearTimeout(controlsTimer.current);
+    controlsTimer.current = setTimeout(() => setControlsVisible(false), 3500);
+  };
+  useEffect(() => () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); }, []);
   const [switchOpen, setSwitchOpen] = useState(false);
   const [skipPanelOpen, setSkipPanelOpen] = useState(false);
   // 播放器对外暴露的精确时间读取接口（「记录当前」用），随播放器卸载置空
@@ -275,9 +284,9 @@ function WatchContent() {
   }
 
   return (
-    <div className="dark min-h-screen flex flex-col text-content bg-[#080809] [background-image:radial-gradient(ellipse_70%_40%_at_50%_4%,rgba(137,92,50,0.16),transparent_70%),linear-gradient(180deg,#13110f_0%,#080809_48%,#050506_100%)]">
-      <header className="glass glass-thick sticky top-0 z-40 border-b border-white/10 [--glass-tint:20_19_19] [--glass-alpha:.78]">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-1.5 sm:gap-3">
+    <div className="dark min-h-screen flex flex-col text-content bg-black">
+      <header className="absolute inset-x-0 top-0 z-40 bg-gradient-to-b from-black/70 to-transparent">
+        <div className="mx-auto px-4 sm:px-6 h-16 flex items-center gap-1.5 sm:gap-3">
           <BackButton />
           <HomeButton />
           <div className="min-w-0">
@@ -314,11 +323,11 @@ function WatchContent() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-10 pt-6 sm:pt-9 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:gap-8 items-start">
+      <main className="flex-1 w-full pb-12">
+        <div className="grid grid-cols-1 gap-6 items-start">
           <div className="min-w-0">
-            <div className="relative rounded-[20px] p-1 sm:p-1.5 bg-gradient-to-b from-white/20 via-white/5 to-[#9d7445]/20 shadow-[0_24px_80px_rgba(0,0,0,0.8),0_0_50px_rgba(185,128,64,0.09)]">
-            <div ref={playerFrameRef} className="aspect-video bg-black rounded-[16px] overflow-hidden">
+            <div className="relative bg-black">
+            <div ref={playerFrameRef} className="group relative h-[100svh] bg-black overflow-hidden" onPointerMove={revealControls} onPointerDown={revealControls} onPlayCapture={() => { setVideoPlaying(true); revealControls(); }} onPauseCapture={() => { setVideoPlaying(false); setControlsVisible(true); }}>
               {currentUrl ? (
                 <PlayerShell
                   url={currentUrl}
@@ -363,12 +372,18 @@ function WatchContent() {
                   )}
                 </div>
               )}
+              {currentUrl && <div className={cn('absolute inset-0 z-10 flex items-center justify-center gap-6 sm:gap-12 pointer-events-none transition-opacity', controlsVisible || !videoPlaying ? 'opacity-100' : 'opacity-0')} aria-hidden={videoPlaying && !controlsVisible} inert={videoPlaying && !controlsVisible}>
+                <button type="button" aria-label="快退 10 秒" className="pointer-events-auto glass glass-clear glass-dark rounded-full w-14 h-14 sm:w-16 sm:h-16 text-white text-sm font-bold" onClick={() => { const video = playerFrameRef.current?.querySelector('video'); if (video) video.currentTime = Math.max(0, video.currentTime - 10); }}>↶ 10</button>
+                <button type="button" aria-label={videoPlaying ? '暂停' : '播放'} className="pointer-events-auto glass glass-clear glass-dark rounded-full w-20 h-20 sm:w-24 sm:h-24 grid place-items-center text-white" onClick={() => { const video = playerFrameRef.current?.querySelector('video'); if (video) { if (video.paused) void video.play().catch(() => {}); else video.pause(); } }}>{videoPlaying ? <span className="flex gap-2"><span className="w-2.5 h-8 rounded-sm bg-white" /><span className="w-2.5 h-8 rounded-sm bg-white" /></span> : <Icon name="play" className="w-9 h-9" />}</button>
+                <button type="button" aria-label="快进 10 秒" className="pointer-events-auto glass glass-clear glass-dark rounded-full w-14 h-14 sm:w-16 sm:h-16 text-white text-sm font-bold" onClick={() => { const video = playerFrameRef.current?.querySelector('video'); if (video) video.currentTime = Math.min(Number.isFinite(video.duration) ? video.duration : video.currentTime + 10, video.currentTime + 10); }}>10 ↷</button>
+              </div>}
+              {currentUrl && <div className={cn('absolute left-5 sm:left-8 bottom-20 z-10 pointer-events-none text-white drop-shadow-lg transition-opacity', controlsVisible || !videoPlaying ? 'opacity-100' : 'opacity-0')} aria-hidden="true"><p className="text-xs sm:text-sm text-white/75">{episodes.length > 1 ? `第 ${currentIndex + 1} 集` : source.name}</p><p className="mt-1 text-xl sm:text-3xl font-bold">{videoTitle}</p></div>}
             </div>
 
             </div>
 
             {/* 操作栏 */}
-            <div className="flex flex-wrap items-center gap-2 mt-5 px-1">
+            <div className="flex flex-wrap items-center gap-2 mt-5 px-4 sm:px-6">
               <button
                 className="btn-ghost btn-sm"
                 disabled={currentIndex <= 0}
@@ -432,7 +447,7 @@ function WatchContent() {
           </div>
 
           {/* 剧集侧栏 */}
-          <aside className="glass glass-thick rounded-[22px] p-5 h-fit [--glass-tint:30_28_26] [--glass-alpha:.65] [--glass-sheen:.06] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+          <aside className="glass glass-thick rounded-[22px] p-5 h-fit mx-4 sm:mx-6 [--glass-tint:30_28_26] [--glass-alpha:.65] [--glass-sheen:.06]">
             <div className="flex items-center justify-between gap-2 mb-2.5">
               <h2 className="text-sm font-semibold text-content">
                 剧集列表{episodes.length > 0 && `（${episodes.length}）`}
@@ -514,16 +529,14 @@ function BackButton() {
   const router = useRouter();
   return (
     <button
-      className="p-2 -ml-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+      className="glass glass-clear glass-dark grid place-items-center w-10 h-10 rounded-full text-white hover:brightness-125 transition-all"
       onClick={() => {
         if (window.history.length > 1) router.back();
         else router.push('/');
       }}
-      aria-label="返回"
+      aria-label="关闭播放器并返回"
     >
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-      </svg>
+      <Icon name="close" className="w-5 h-5" />
     </button>
   );
 }
