@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
 import { DoubanView } from '@/components/douban-section';
 import { HomeHero, PreviewModal } from '@/components/home-hero';
-import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, useDoubanList } from '@/components/home-rows';
+import { BangumiTodayRow, CategoryRow, DoubanRow, HotListRow, MOVIE_CATEGORIES, TV_CATEGORIES, useDoubanList } from '@/components/home-rows';
 import { DetailModal } from '@/components/detail-modal';
 import { AggregatedCard, aggregateResults } from '@/components/video-card';
 import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled } from '@/lib/store';
@@ -187,20 +187,22 @@ function HomeContent() {
         <Header transparent />
         <h1 className="sr-only">LibreTV</h1>
         <HomeHero onPlay={playItem} onMore={openPreview} />
-        <main className="relative z-10 -mt-6 md:-mt-12 flex-1 space-y-4 sm:space-y-6 pb-10">
+        <main className="relative z-10 -mt-8 md:-mt-10 flex-1 space-y-3 sm:space-y-5 pb-10">
+          {customAPIs.length === 0 && envSources.length === 0 && <SetupBanner />}
           <DoubanRow title="今日热门电影" type="movie" tag="热门" ranked href="/?browse=movie" onOpen={openPreview} />
           <DoubanRow title="今日热门剧集" type="tv" tag="热门" ranked href="/?browse=tv" onOpen={openPreview} />
-          <CategoryRow />
+          <CategoryRow title="按分类浏览" categories={MOVIE_CATEGORIES} />
+          <CategoryRow title="按地区浏览剧集" categories={TV_CATEGORIES} />
           <DoubanRow title="最新上映" type="movie" tag="最新" href="/?browse=movie&tag=%E6%9C%80%E6%96%B0" onOpen={openPreview} />
-          <DoubanRow title="精选美剧" type="tv" tag="美剧" feature href="/?browse=tv&tag=%E7%BE%8E%E5%89%A7" onOpen={openPreview} />
-          <DoubanRow title="豆瓣高分精选" type="movie" tag="豆瓣高分" href="/?browse=movie&tag=%E8%B1%86%E7%93%A3%E9%AB%98%E5%88%86" onOpen={openPreview} />
-          <DoubanRow title="热门动画" type="tv" tag="日本动画" href="/?browse=tv&tag=%E6%97%A5%E6%9C%AC%E5%8A%A8%E7%94%BB" onOpen={openPreview} />
+          <DoubanRow title="热门新剧" type="tv" tag="美剧" feature href="/?browse=tv&tag=%E7%BE%8E%E5%89%A7" onOpen={openPreview} />
+          <DoubanRow title="高分动漫精选" type="tv" tag="日本动画" href="/?browse=tv&tag=%E6%97%A5%E6%9C%AC%E5%8A%A8%E7%94%BB" onOpen={openPreview} />
           <BangumiTodayRow onOpen={openPreview} />
-          <DoubanRow title="华语电影" type="movie" tag="华语" href="/?browse=movie&tag=%E5%8D%8E%E8%AF%AD" onOpen={openPreview} />
+          <DoubanRow title="豆瓣高分电影" type="movie" tag="豆瓣高分" href="/?browse=movie&tag=%E8%B1%86%E7%93%A3%E9%AB%98%E5%88%86" onOpen={openPreview} />
           <DoubanRow title="热播国产剧" type="tv" tag="国产剧" href="/?browse=tv&tag=%E5%9B%BD%E4%BA%A7%E5%89%A7" onOpen={openPreview} />
           <DoubanRow title="韩剧精选" type="tv" tag="韩剧" feature href="/?browse=tv&tag=%E9%9F%A9%E5%89%A7" onOpen={openPreview} />
           <HotListRow title="豆瓣一周口碑" id="douban_movie_weekly" ranked onOpen={openPreview} />
           <HotListRow title="国产剧周榜" id="douban_tv_chinese" ranked onOpen={openPreview} />
+          <DoubanRow title="华语电影" type="movie" tag="华语" href="/?browse=movie&tag=%E5%8D%8E%E8%AF%AD" onOpen={openPreview} />
           <DoubanRow title="综艺" type="tv" tag="综艺" href="/?browse=tv&tag=%E7%BB%BC%E8%89%BA" onOpen={openPreview} />
           <DoubanRow title="冷门佳片" type="movie" tag="冷门佳片" href="/?browse=movie&tag=%E5%86%B7%E9%97%A8%E4%BD%B3%E7%89%87" onOpen={openPreview} />
           <DoubanRow title="纪录片" type="tv" tag="纪录片" href="/?browse=tv&tag=%E7%BA%AA%E5%BD%95%E7%89%87" onOpen={openPreview} />
@@ -256,7 +258,7 @@ function HomeContent() {
                     ? // 展开时：外框（含上圆角）沿用输入框的聚焦样式不变，只把底边改为内部分隔线，
                       // 使输入区在展开状态下仍是边界清晰的独立输入框，而非与列表糊成一片
                       'rounded-t-xl rounded-b-none border-accent border-b-line bg-surface-raised'
-                    : 'rounded-xl border-transparent bg-chip focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30'
+                    : 'glass rounded-2xl border-transparent focus-within:ring-2 focus-within:ring-accent/40'
                 )}
               >
                 <Icon name="search" className="w-5 h-5 self-center mr-2.5 text-faint shrink-0" />
@@ -305,7 +307,7 @@ function HomeContent() {
                   className={cn(
                     'btn-primary shrink-0 px-5 font-semibold transition-[background-color,filter] active:brightness-90 active:!scale-100',
                     '!rounded-l-none',
-                    searchHistory.visible ? '!rounded-tr-xl !rounded-br-none' : '!rounded-r-xl'
+                    searchHistory.visible ? '!rounded-tr-xl !rounded-br-none' : '!rounded-r-2xl'
                   )}
                 >
                   搜索
@@ -422,6 +424,28 @@ function HomeContent() {
   );
 }
 
+/** 首页玻璃横幅：尚未配置点播源时引导去设置（对应参考图中 Hero 下方的横幅） */
+function SetupBanner() {
+  return (
+    <div className="px-4 sm:px-8 lg:px-12">
+      <div className="glass flex items-center gap-3 sm:gap-4 rounded-[22px] px-3.5 py-3 sm:px-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icons/icon-192.png" alt="" className="w-10 h-10 rounded-[11px] shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px] font-bold text-content">添加点播源，开始观看</div>
+          <div className="text-[12px] text-muted truncate">LibreTV 不内置片源 · 在设置中添加 Apple CMS 采集接口即可搜索播放</div>
+        </div>
+        <button
+          className="btn px-4 py-1.5 text-[13px] font-semibold bg-content text-page hover:opacity-90 shrink-0"
+          onClick={() => window.dispatchEvent(new Event('libretv:open-settings'))}
+        >
+          去设置
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 搜索页空态：热门电影 / 剧集作为「大家都在搜」 */
 function SearchSuggestions({ onPick }: { onPick: (title: string) => void }) {
   const movies = useDoubanList('movie', '热门');
@@ -431,13 +455,13 @@ function SearchSuggestions({ onPick }: { onPick: (title: string) => void }) {
   return (
     <section aria-label="热门搜索" className="max-w-3xl">
       <h2 className="text-xl font-bold text-content mb-3">大家都在搜</h2>
-      <ul className="grid sm:grid-cols-2 gap-x-8">
+      <ul className="glass rounded-[24px] px-4 sm:px-5 py-1 grid sm:grid-cols-2 gap-x-8">
         {titles.map((item, i) => (
           <li key={item.id + i}>
             <button
               type="button"
               onClick={() => onPick(item.title)}
-              className="w-full flex items-center gap-3 py-3 border-b border-line/50 text-left group"
+              className="w-full flex items-center gap-3 py-3 border-b border-white/5 text-left group"
             >
               <Icon name="search" className="w-4 h-4 text-faint shrink-0" />
               <span className="flex-1 truncate text-[15px] text-accent group-hover:underline">{item.title}</span>

@@ -92,6 +92,33 @@ const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 /** 豆瓣移动端 rexxar 接口：含剧情简介，数据中心 IP 下也可用 */
+async function fetchRexxarStills(kind: string, id: string): Promise<string[]> {
+  try {
+    const res = await fetchUpstream(
+      `https://m.douban.com/rexxar/api/v2/${kind}/${encodeURIComponent(id)}/photos?start=0&count=30`,
+      {
+        timeoutMs: 6000,
+        headers: { 'User-Agent': MOBILE_UA, Referer: 'https://m.douban.com/', Accept: 'application/json' },
+      }
+    );
+    if (!res.ok) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await res.json()) as { photos?: any[] };
+    const out: string[] = [];
+    for (const p of data.photos ?? []) {
+      const img = p?.image?.large;
+      if (!img?.url || !img.width || !img.height) continue;
+      // 只要横版剧照（宽高比 ≥ 1.4），竖版多为海报/宣传照
+      if (img.width / img.height < 1.4 || img.width < 800) continue;
+      out.push(String(img.url));
+      if (out.length >= 6) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 async function fetchRexxarAbstract(id: string): Promise<DoubanAbstract | null> {
   for (const kind of ['movie', 'tv']) {
     try {
@@ -108,7 +135,9 @@ async function fetchRexxarAbstract(id: string): Promise<DoubanAbstract | null> {
         Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : x?.name)).filter(Boolean).slice(0, 6) : undefined;
       const rate = typeof s.rating?.value === 'number' && s.rating.value > 0 ? s.rating.value.toFixed(1) : undefined;
       const eps = Number(s.episodes_count) > 0 ? String(s.episodes_count) : undefined;
+      const stills = await fetchRexxarStills(kind, id);
       return {
+        stills,
         id,
         title: str(s.title),
         rate,
@@ -168,7 +197,8 @@ export async function fetchDoubanAbstract(id: string): Promise<DoubanAbstract> {
         actors: arr(s.actors),
         comment: str(s.short_comment?.content),
       };
-      setCache(cacheKey, result, 6 * 60 * 60 * 1000);
+      // 回退结果没有剧照/简介：只短暂缓存，便于 rexxar 恢复后尽快拿到完整数据
+      setCache(cacheKey, result, 10 * 60 * 1000);
       return result;
     } catch {
       // 尝试下一个

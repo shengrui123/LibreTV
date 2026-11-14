@@ -224,19 +224,21 @@ export function Drawer({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none',
-          'transition-transform duration-200 ease-out',
+          'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none overflow-hidden',
+          // 液态玻璃：桌面端悬浮圆角面板，四周留出 12px
+          'lg:top-3 lg:right-3 lg:h-[calc(100%-24px)] lg:rounded-[28px] lg:border lg:border-white/10 lg:shadow-[inset_0_1px_0_rgb(255_255_255/.25),0_30px_80px_-20px_rgb(0_0_0/.7)]',
+          'transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
           width,
           !modal && 'pointer-events-auto shadow-2xl',
           // 小屏底部抽屉：占下半屏、贴底、顶部圆角，留出上半屏给画面
           mobileSheet &&
-            'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-auto max-lg:max-h-[60vh] max-lg:max-w-none max-lg:rounded-t-xl max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
+            'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-auto max-lg:max-h-[60vh] max-lg:max-w-none max-lg:rounded-t-[28px] max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
           // 近全屏底部面板：单列设置项在手机上需要完整高度可用
           mobileFull &&
-            'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-[92dvh] max-lg:max-h-[92dvh] max-lg:max-w-none max-lg:rounded-t-xl max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
+            'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-[92dvh] max-lg:max-h-[92dvh] max-lg:max-w-none max-lg:rounded-t-[28px] max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
           entered
             ? 'translate-x-0 max-lg:translate-y-0'
-            : cn('translate-x-full', (mobileSheet || mobileFull) && 'max-lg:translate-x-0 max-lg:translate-y-full')
+            : cn('translate-x-[calc(100%+24px)]', (mobileSheet || mobileFull) && 'max-lg:translate-x-0 max-lg:translate-y-full')
         )}
         style={panelStyle}
       >

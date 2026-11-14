@@ -14,14 +14,14 @@ import { cn } from '@/lib/utils';
 type NavKey = 'home' | 'movie' | 'tv' | 'live' | 'about' | 'search';
 
 /**
- * 顶部导航（Apple TV / Netflix 风格）：
- * - 首页叠在 Hero 之上，滚动前为透明渐变，滚动后变为毛玻璃黑；
- * - 桌面端横向导航 + 可展开的搜索框；
- * - 手机端顶部只保留 Logo 与常用图标，主导航放进底部 Tab 栏。
+ * 顶部导航（液态玻璃）：
+ * - 悬浮的玻璃圆钮 + 玻璃胶囊导航，没有整条底色，内容从下方透出；
+ * - 左侧按钮打开玻璃侧边栏（iPad 样式），宽屏额外显示居中胶囊导航；
+ * - 手机端底部是悬浮的玻璃 Tab 栏。
  */
 export function Header(props: { showSearch?: boolean; transparent?: boolean }) {
   return (
-    <Suspense fallback={<div className={props.transparent ? 'h-0' : 'h-14 sm:h-16'} />}>
+    <Suspense fallback={<div className={props.transparent ? 'h-0' : 'h-16'} />}>
       <HeaderInner {...props} />
     </Suspense>
   );
@@ -33,9 +33,9 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
   const searchParams = useSearchParams();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(showSearch);
-  const [scrolled, setScrolled] = useState(!transparent);
+  const [scrolled, setScrolled] = useState(false);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const searchHistory = useSearchHistory(query);
@@ -56,17 +56,12 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
               : 'home';
 
   useEffect(() => {
-    if (!transparent) {
-      setScrolled(true);
-      return;
-    }
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [transparent]);
+  }, []);
 
-  // 手机底部 Tab 栏需要给页面留出底部空白
   useEffect(() => {
     document.body.classList.add('has-tabbar');
     return () => document.body.classList.remove('has-tabbar');
@@ -76,13 +71,23 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
     if (searchOpen && !showSearch) inputRef.current?.focus();
   }, [searchOpen, showSearch]);
 
-  const closeMenu = () => setMenuOpen(false);
+  useEffect(() => {
+    const open = () => setSettingsOpen(true);
+    window.addEventListener('libretv:open-settings', open);
+    return () => window.removeEventListener('libretv:open-settings', open);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSidebarOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sidebarOpen]);
 
   const submitSearch = (text: string) => {
     const q = text.trim().slice(0, 100);
     if (!q) return;
     searchHistory.close();
-    closeMenu();
     router.push(`/?s=${encodeURIComponent(q)}`, { scroll: false });
     searchHistory.record(q);
   };
@@ -92,185 +97,198 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
     submitSearch(text);
   };
 
-  const solid = scrolled || menuOpen;
+  // 叠在 Hero 上且未滚动时：图标用白色；其余情况随主题
+  const onImage = transparent && !scrolled;
 
   return (
     <>
-      <header
-        className={cn(
-          'top-0 inset-x-0 z-40 transition-[background-color,backdrop-filter,border-color] duration-300',
-          transparent ? 'fixed' : 'sticky',
-          solid
-            ? 'bg-page/75 backdrop-blur-2xl backdrop-saturate-150 border-b border-line/40'
-            : 'bg-gradient-to-b from-black/70 via-black/30 to-transparent border-b border-transparent'
-        )}
-      >
-        <div className="max-w-[1680px] mx-auto px-4 sm:px-8 lg:px-12 h-14 sm:h-16 flex items-center gap-3 sm:gap-6">
-          <Link href="/" aria-label="LibreTV 首页" className="flex items-center gap-2 shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/icon-512.png" alt="" className="w-7 h-7 rounded-[8px]" />
-            <span
-              className={cn(
-                'text-[19px] font-extrabold tracking-tight',
-                solid ? 'text-content' : 'text-white'
-              )}
-            >
-              Libre<span className="text-brand">TV</span>
-            </span>
-          </Link>
+      <header className={cn('top-0 inset-x-0 z-40 pointer-events-none', transparent ? 'fixed' : 'sticky')}>
+        {/* 滚动后顶部的柔和渐隐，保证玻璃按钮下的内容不抢眼 */}
+        <div
+          aria-hidden
+          className={cn(
+            'absolute inset-x-0 top-0 h-24 transition-opacity duration-300 bg-gradient-to-b from-page/80 via-page/40 to-transparent',
+            scrolled || !transparent ? 'opacity-100' : 'opacity-0'
+          )}
+        />
+        <div
+          className={cn(
+            'relative max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 h-16 flex items-center gap-2 sm:gap-3',
+            onImage ? 'text-white' : 'text-content'
+          )}
+        >
+          <div className="pointer-events-auto flex items-center gap-2.5">
+            <GlassCircle label="打开侧边栏" onClick={() => setSidebarOpen(true)}>
+              <SidebarIcon />
+            </GlassCircle>
+            <Link href="/" aria-label="LibreTV 首页" className="hidden sm:flex items-center gap-1.5">
+              <span className="text-[18px] font-extrabold tracking-tight [text-shadow:0_1px_8px_rgba(0,0,0,.25)]">
+                Libre<span className="text-brand">TV</span>
+              </span>
+            </Link>
+          </div>
 
-          {/* 桌面主导航 */}
-          <nav className="hidden md:flex items-center gap-1" aria-label="主导航">
-            <NavPill href="/" active={active === 'home'} light={!solid}>首页</NavPill>
-            <NavPill href="/?browse=movie" active={active === 'movie'} light={!solid}>电影</NavPill>
-            <NavPill href="/?browse=tv" active={active === 'tv'} light={!solid}>剧集</NavPill>
-            <NavPill href="/live" active={active === 'live'} light={!solid}>直播</NavPill>
-            <NavPill href="/about" active={active === 'about'} light={!solid}>关于</NavPill>
+          {/* 宽屏：居中的玻璃胶囊导航 */}
+          <nav
+            aria-label="主导航"
+            className="pointer-events-auto hidden lg:flex absolute left-1/2 -translate-x-1/2 glass glass-clear rounded-full p-1 gap-0.5"
+          >
+            <NavPill href="/" active={active === 'home'}>首页</NavPill>
+            <NavPill href="/?browse=movie" active={active === 'movie'}>电影</NavPill>
+            <NavPill href="/?browse=tv" active={active === 'tv'}>剧集</NavPill>
+            <NavPill href="/live" active={active === 'live'}>直播</NavPill>
+            <NavPill href="/about" active={active === 'about'}>关于</NavPill>
           </nav>
 
           <div className="flex-1" />
 
-          {/* 桌面搜索：图标展开为胶囊输入框 */}
-          <form
-            className="hidden sm:block"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitSearch(query);
-            }}
-          >
-            <div ref={searchHistory.containerRef} className="relative">
-              <div
-                className={cn(
-                  'flex items-center h-9 rounded-full transition-all duration-300 overflow-hidden',
-                  searchOpen
-                    ? 'w-56 lg:w-72 bg-chip/90 ring-1 ring-line/60 backdrop-blur'
-                    : 'w-9 hover:bg-white/10'
-                )}
-              >
-                <button
-                  type={searchOpen ? 'submit' : 'button'}
-                  className={cn('shrink-0 w-9 h-9 grid place-items-center', solid ? 'text-content' : 'text-white')}
-                  aria-label="搜索"
-                  onClick={(e) => {
-                    if (!searchOpen) {
-                      e.preventDefault();
-                      setSearchOpen(true);
-                    }
-                  }}
-                >
-                  <Icon name="search" className="w-[18px] h-[18px]" />
-                </button>
-                <input
-                  ref={inputRef}
+          <div className="pointer-events-auto flex items-center gap-2">
+            {/* 桌面：玻璃圆钮展开为玻璃胶囊搜索框 */}
+            <form
+              className="hidden sm:block"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitSearch(query);
+              }}
+            >
+              <div ref={searchHistory.containerRef} className="relative">
+                <div
                   className={cn(
-                    'flex-1 min-w-0 bg-transparent text-sm text-content placeholder:text-faint focus:outline-none pr-3',
-                    !searchOpen && 'pointer-events-none opacity-0'
+                    'glass glass-clear flex items-center h-10 rounded-full transition-[width] duration-300 overflow-hidden',
+                    searchOpen ? 'w-60 lg:w-72' : 'w-10'
                   )}
-                  aria-label="搜索影片"
-                  placeholder="电影、剧集、动漫…"
-                  value={query}
-                  maxLength={100}
-                  tabIndex={searchOpen ? 0 : -1}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    searchHistory.resetActive();
-                  }}
-                  onFocus={searchHistory.onFocus}
-                  onBlur={() => {
-                    if (!query && !showSearch) setTimeout(() => setSearchOpen(false), 150);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setSearchOpen(showSearch);
-                      inputRef.current?.blur();
+                >
+                  <button
+                    type={searchOpen ? 'submit' : 'button'}
+                    className="shrink-0 w-10 h-10 grid place-items-center"
+                    aria-label="搜索"
+                    onClick={(e) => {
+                      if (!searchOpen) {
+                        e.preventDefault();
+                        setSearchOpen(true);
+                      }
+                    }}
+                  >
+                    <Icon name="search" className="w-[18px] h-[18px]" />
+                  </button>
+                  <input
+                    ref={inputRef}
+                    className={cn(
+                      'flex-1 min-w-0 bg-transparent text-sm placeholder:opacity-60 placeholder:text-current focus:outline-none pr-4',
+                      !searchOpen && 'pointer-events-none opacity-0'
+                    )}
+                    aria-label="搜索影片"
+                    placeholder="电影、剧集、动漫…"
+                    value={query}
+                    maxLength={100}
+                    tabIndex={searchOpen ? 0 : -1}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      searchHistory.resetActive();
+                    }}
+                    onFocus={searchHistory.onFocus}
+                    onBlur={() => {
+                      if (!query && !showSearch) setTimeout(() => setSearchOpen(false), 150);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setSearchOpen(showSearch);
+                        inputRef.current?.blur();
+                      }
+                      searchHistory.onKeyDown(e, pickHistory);
+                    }}
+                    role="combobox"
+                    aria-expanded={searchHistory.visible}
+                    aria-controls="header-search-history"
+                    aria-autocomplete="list"
+                    aria-activedescendant={
+                      searchHistory.visible && searchHistory.activeIndex >= 0
+                        ? `header-search-history-${searchHistory.activeIndex}`
+                        : undefined
                     }
-                    searchHistory.onKeyDown(e, pickHistory);
-                  }}
-                  role="combobox"
-                  aria-expanded={searchHistory.visible}
-                  aria-controls="header-search-history"
-                  aria-autocomplete="list"
-                  aria-activedescendant={
-                    searchHistory.visible && searchHistory.activeIndex >= 0
-                      ? `header-search-history-${searchHistory.activeIndex}`
-                      : undefined
-                  }
-                />
-              </div>
-              {searchOpen && searchHistory.visible && (
-                <div className="absolute right-0 top-full mt-2 w-72">
-                  <SearchHistoryDropdown
-                    id="header-search-history"
-                    matches={searchHistory.matches}
-                    activeIndex={searchHistory.activeIndex}
-                    onPick={pickHistory}
-                    onRemove={searchHistory.remove}
-                    onClearAll={searchHistory.clearAll}
                   />
                 </div>
-              )}
-            </div>
-          </form>
-
-          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-            <Link
-              href="/?search=1"
-              aria-label="搜索"
-              className={cn('sm:hidden p-2 rounded-full transition-colors', solid ? 'text-content' : 'text-white')}
-            >
-              <Icon name="search" />
+                {searchOpen && searchHistory.visible && (
+                  <div className="absolute right-0 top-full mt-2 w-72 text-content">
+                    <SearchHistoryDropdown
+                      id="header-search-history"
+                      matches={searchHistory.matches}
+                      activeIndex={searchHistory.activeIndex}
+                      onPick={pickHistory}
+                      onRemove={searchHistory.remove}
+                      onClearAll={searchHistory.clearAll}
+                    />
+                  </div>
+                )}
+              </div>
+            </form>
+            <Link href="/?search=1" aria-label="搜索" className="sm:hidden glass glass-clear w-10 h-10 rounded-full grid place-items-center">
+              <Icon name="search" className="w-[18px] h-[18px]" />
             </Link>
-            <div className="hidden sm:flex items-center gap-0.5">
-              <ThemeToggle />
-              <IconButton label="观看历史" light={!solid} onClick={() => setHistoryOpen(true)}>
-                <Icon name="clock" />
-              </IconButton>
-              <IconButton label="下载管理" light={!solid} onClick={requestShowDownloadManager}>
-                <Icon name="download" />
-              </IconButton>
+            <div className="hidden sm:block">
+              <GlassCircle label="观看历史" onClick={() => setHistoryOpen(true)}>
+                <Icon name="clock" className="w-[18px] h-[18px]" />
+              </GlassCircle>
             </div>
-            <IconButton label="设置" light={!solid} onClick={() => setSettingsOpen(true)}>
-              <Icon name="gear" />
-            </IconButton>
-            <div className="sm:hidden">
-              <IconButton
-                label={menuOpen ? '关闭菜单' : '更多'}
-                light={!solid}
-                expanded={menuOpen}
-                onClick={() => setMenuOpen((v) => !v)}
-              >
-                <Icon name={menuOpen ? 'close' : 'menu'} />
-              </IconButton>
-            </div>
+            <GlassCircle label="设置" onClick={() => setSettingsOpen(true)}>
+              <Icon name="gear" className="w-[18px] h-[18px]" />
+            </GlassCircle>
           </div>
         </div>
-
-        {menuOpen && (
-          <nav aria-label="更多" className="sm:hidden border-t border-line/50 px-3 py-2 animate-fade-in">
-            <div className="grid grid-cols-2 gap-1.5">
-              <MenuRow href="/about" icon="info" onNavigate={closeMenu}>关于</MenuRow>
-              <MenuAction
-                icon="download"
-                onClick={() => {
-                  closeMenu();
-                  requestShowDownloadManager();
-                }}
-              >
-                下载管理
-              </MenuAction>
-            </div>
-            <div className="mt-1.5 flex items-center justify-between rounded-xl bg-chip px-3 py-2">
-              <span className="text-xs text-muted">外观主题</span>
-              <ThemeToggle />
-            </div>
-          </nav>
-        )}
       </header>
 
-      {/* 手机底部 Tab 栏（iOS 风格） */}
+      {/* 玻璃侧边栏 */}
+      <div className={cn('fixed inset-0 z-50', !sidebarOpen && 'pointer-events-none')} aria-hidden={!sidebarOpen}>
+        <div
+          className={cn('absolute inset-0 bg-black/40 transition-opacity duration-300', sidebarOpen ? 'opacity-100' : 'opacity-0')}
+          onClick={() => setSidebarOpen(false)}
+        />
+        <aside
+          aria-label="侧边栏"
+          className={cn(
+            'glass glass-thick absolute left-3 top-3 bottom-3 w-[280px] rounded-[28px] p-3 flex flex-col text-content',
+            'transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-[calc(100%+24px)]'
+          )}
+        >
+          <div className="flex items-center justify-between px-2 pt-1 pb-3">
+            <span className="text-xl font-extrabold tracking-tight">
+              Libre<span className="text-brand">TV</span>
+            </span>
+            <button
+              className="w-9 h-9 grid place-items-center rounded-full hover:bg-hover"
+              aria-label="关闭侧边栏"
+              tabIndex={sidebarOpen ? 0 : -1}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <SidebarIcon />
+            </button>
+          </div>
+          <nav className="flex flex-col gap-0.5">
+            <SideLink href="/" icon="home" active={active === 'home'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>首页</SideLink>
+            <SideLink href="/?search=1" icon="search" active={active === 'search'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>搜索</SideLink>
+            <SideLink href="/?browse=movie" icon="film" active={active === 'movie'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>电影</SideLink>
+            <SideLink href="/?browse=tv" icon="tv" active={active === 'tv'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>剧集</SideLink>
+            <SideLink href="/live" icon="bolt" active={active === 'live'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>直播</SideLink>
+          </nav>
+          <div className="my-3 mx-2 h-px bg-line" />
+          <div className="flex flex-col gap-0.5">
+            <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setHistoryOpen(true); }}>观看历史</SideAction>
+            <SideAction icon="download" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); requestShowDownloadManager(); }}>下载管理</SideAction>
+            <SideAction icon="gear" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setSettingsOpen(true); }}>设置</SideAction>
+            <SideLink href="/about" icon="info" active={active === 'about'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>关于</SideLink>
+          </div>
+          <div className="mt-auto flex items-center justify-between rounded-2xl bg-chip px-3 py-2">
+            <span className="text-xs text-muted">外观</span>
+            <ThemeToggle />
+          </div>
+        </aside>
+      </div>
+
+      {/* 手机：悬浮玻璃 Tab 栏 */}
       <nav
         aria-label="底部导航"
-        className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-page/80 backdrop-blur-2xl backdrop-saturate-150 border-t border-line/50 pb-[env(safe-area-inset-bottom)]"
+        className="sm:hidden fixed z-40 inset-x-4 bottom-[calc(12px+env(safe-area-inset-bottom))] glass rounded-full p-1"
       >
         <div className="grid grid-cols-5 h-[56px]">
           <TabItem href="/" icon="home" active={active === 'home'}>首页</TabItem>
@@ -280,9 +298,9 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
-            className="flex flex-col items-center justify-center gap-0.5 text-[10px] text-faint"
+            className="flex flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-medium text-muted"
           >
-            <Icon name="clock" className="w-6 h-6" />
+            <Icon name="clock" className="w-[22px] h-[22px]" />
             历史
           </button>
         </div>
@@ -294,123 +312,99 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
   );
 }
 
-function NavPill({
-  href,
-  active,
-  light,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  light: boolean;
-  children: React.ReactNode;
-}) {
+function SidebarIcon() {
   return (
-    <Link
-      href={href}
-      scroll
-      className={cn(
-        'px-3.5 py-1.5 rounded-full text-[15px] font-medium transition-colors',
-        active
-          ? light
-            ? 'bg-white/20 text-white'
-            : 'bg-content/10 text-content'
-          : light
-            ? 'text-white/75 hover:text-white'
-            : 'text-muted hover:text-content'
-      )}
-    >
-      {children}
-    </Link>
+    <svg className="w-[19px] h-[19px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <rect x="3" y="4.5" width="18" height="15" rx="3.5" />
+      <path d="M9.5 4.5v15" />
+    </svg>
   );
 }
 
-function TabItem({
-  href,
-  icon,
-  active,
-  children,
-}: {
-  href: string;
-  icon: IconName;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'flex flex-col items-center justify-center gap-0.5 text-[10px] transition-colors',
-        active ? 'text-content' : 'text-faint'
-      )}
-    >
-      <Icon name={icon} className="w-6 h-6" />
-      {children}
-    </Link>
-  );
-}
-
-function IconButton({
-  label,
-  onClick,
-  expanded,
-  light,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  expanded?: boolean;
-  light?: boolean;
-  children: React.ReactNode;
-}) {
+function GlassCircle({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      className={cn(
-        'p-2 rounded-full transition-colors',
-        light ? 'text-white/85 hover:text-white hover:bg-white/10' : 'text-muted hover:text-content hover:bg-hover'
-      )}
+      type="button"
       title={label}
       aria-label={label}
-      aria-expanded={expanded}
       onClick={onClick}
+      className="glass glass-clear w-10 h-10 rounded-full grid place-items-center transition-transform hover:scale-105 active:scale-95"
     >
       {children}
     </button>
   );
 }
 
-function MenuRow({
+function NavPill({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'px-4 py-1.5 rounded-full text-[14px] font-semibold transition-all',
+        active ? 'glass-pill-active' : 'opacity-75 hover:opacity-100'
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function SideLink({
   href,
   icon,
+  active,
   onNavigate,
+  tab,
   children,
 }: {
   href: string;
   icon: IconName;
+  active: boolean;
   onNavigate: () => void;
+  tab: boolean;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
       onClick={onNavigate}
-      className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted hover:bg-hover hover:text-content transition-colors"
+      tabIndex={tab ? 0 : -1}
+      className={cn(
+        'flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-medium transition-colors',
+        active ? 'glass-pill-active text-content' : 'text-muted hover:bg-hover hover:text-content'
+      )}
     >
-      <Icon name={icon} className="w-4 h-4 shrink-0" />
+      <Icon name={icon} className="w-5 h-5 shrink-0" />
       {children}
     </Link>
   );
 }
 
-function MenuAction({ icon, onClick, children }: { icon: IconName; onClick: () => void; children: React.ReactNode }) {
+function SideAction({ icon, onClick, tab, children }: { icon: IconName; onClick: () => void; tab: boolean; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted hover:bg-hover hover:text-content transition-colors text-left"
+      tabIndex={tab ? 0 : -1}
+      className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-medium text-muted hover:bg-hover hover:text-content transition-colors text-left"
     >
-      <Icon name={icon} className="w-4 h-4 shrink-0" />
+      <Icon name={icon} className="w-5 h-5 shrink-0" />
       {children}
     </button>
+  );
+}
+
+function TabItem({ href, icon, active, children }: { href: string; icon: IconName; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'flex flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-medium transition-all',
+        active ? 'glass-pill-active text-accent' : 'text-muted'
+      )}
+    >
+      <Icon name={icon} className="w-[22px] h-[22px]" />
+      {children}
+    </Link>
   );
 }

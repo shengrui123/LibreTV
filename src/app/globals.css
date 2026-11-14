@@ -32,6 +32,17 @@
   --c-success-solid: 21 128 61;
   --c-warning-solid: 180 83 9;
   --c-info-solid: 29 78 216;
+  --glass-tint: 250 250 252;
+  --glass-alpha: .58;
+  --glass-alpha-clear: .32;
+  --glass-alpha-thick: .78;
+  --glass-sheen: .55;
+  --glass-hi: .9;
+  --glass-edge: .5;
+  --glass-drop: .16;
+  --glass-blur: 28px;
+  --glass-bright: 1.04;
+  --glass-active: .85;
   color-scheme: light;
 }
 
@@ -61,6 +72,17 @@
   --c-success-solid: 21 128 61;
   --c-warning-solid: 180 83 9;
   --c-info-solid: 29 78 216;
+  --glass-tint: 52 52 60;
+  --glass-alpha: .34;
+  --glass-alpha-clear: .16;
+  --glass-alpha-thick: .58;
+  --glass-sheen: .10;
+  --glass-hi: .30;
+  --glass-edge: .10;
+  --glass-drop: .55;
+  --glass-blur: 28px;
+  --glass-bright: 1.08;
+  --glass-active: .18;
   color-scheme: dark;
 }
 
@@ -69,9 +91,9 @@ body {
   @apply bg-page text-content antialiased;
 }
 
-.dark body {
-  background: #000;
-}
+/* 背景色只放在 html 上：body 透明，才能让 fixed 的环境光层（-z）透出来 */
+.dark html, html.dark { background: #000; }
+body { background: transparent !important; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', Roboto, 'PingFang SC',
@@ -80,7 +102,7 @@ body {
 
 @layer components {
   .card {
-    @apply bg-card border border-line/70 rounded-xl overflow-hidden transition-all duration-200;
+    @apply bg-card border border-line/70 rounded-2xl overflow-hidden transition-all duration-200;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97];
@@ -95,10 +117,55 @@ body {
     @apply btn px-6 py-2.5 text-[15px] font-semibold bg-content text-page hover:opacity-90;
   }
   .btn-glass {
-    @apply btn px-5 py-2.5 text-[15px] font-semibold text-white bg-white/20 hover:bg-white/30 backdrop-blur-xl;
+    @apply btn glass glass-clear px-5 py-2.5 text-[15px] font-semibold text-white hover:brightness-125;
+  }
+  .btn-icon-glass {
+    @apply glass glass-clear inline-grid place-items-center w-10 h-10 rounded-full text-white transition-all hover:brightness-125 active:scale-95;
+  }
+
+  /* ---------------- Liquid Glass ----------------
+   * 半透明 + 强模糊饱和（折射感）+ 顶部高光 + 渐变描边（镜面边缘）+ 柔和投影。
+   * glass-clear：叠在图片上更通透；glass-thick：面板/抽屉，更厚更稳。 */
+  .glass {
+    position: relative;
+    background:
+      linear-gradient(155deg, rgb(255 255 255 / var(--glass-sheen)) 0%, rgb(255 255 255 / 0) 42%, rgb(255 255 255 / calc(var(--glass-sheen) * .5)) 100%),
+      rgb(var(--glass-tint) / var(--glass-alpha));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(190%) brightness(var(--glass-bright));
+    backdrop-filter: blur(var(--glass-blur)) saturate(190%) brightness(var(--glass-bright));
+    box-shadow:
+      inset 0 1px 0.5px 0 rgb(255 255 255 / var(--glass-hi)),
+      inset 0 -1px 1px 0 rgb(255 255 255 / calc(var(--glass-hi) * .25)),
+      inset 0 0 0 0.5px rgb(255 255 255 / var(--glass-edge)),
+      0 10px 34px -10px rgb(0 0 0 / var(--glass-drop));
+  }
+  .glass::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgb(255 255 255 / calc(var(--glass-hi) * 1.3)), rgb(255 255 255 / 0) 38%, rgb(255 255 255 / 0) 62%, rgb(255 255 255 / calc(var(--glass-hi) * .8)));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+  .glass-clear {
+    --glass-alpha: var(--glass-alpha-clear);
+    --glass-blur: 18px;
+  }
+  .glass-thick {
+    --glass-alpha: var(--glass-alpha-thick);
+    --glass-blur: 44px;
+  }
+  /* 选中态：玻璃里的一颗更亮的胶囊 */
+  .glass-pill-active {
+    background: rgb(255 255 255 / var(--glass-active));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), 0 2px 10px -2px rgb(0 0 0 / .25);
   }
   .btn-ghost {
-    @apply btn bg-chip text-content/80 hover:bg-hover hover:text-content;
+    @apply btn glass text-content/90 hover:text-content hover:brightness-110;
   }
   .input {
     @apply bg-chip border border-transparent rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint;
@@ -123,6 +190,41 @@ body {
     @apply bg-line rounded-full;
   }
 }
+
+/* ---------- 全局玻璃化：面板 / 卡片 / 输入 ----------
+ * 现有组件全部基于语义色 bg-surface / bg-card / bg-chip，这里统一改写为液态玻璃，
+ * 无需逐个组件修改即可覆盖设置抽屉、详情弹窗、下拉、换源面板、播放页等所有页面。 */
+.bg-surface, .bg-surface-raised {
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / var(--glass-sheen)), rgb(255 255 255 / 0) 40%),
+    rgb(var(--glass-tint) / var(--glass-alpha-thick)) !important;
+  -webkit-backdrop-filter: blur(44px) saturate(190%);
+  backdrop-filter: blur(44px) saturate(190%);
+}
+.bg-card {
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / calc(var(--glass-sheen) * .8)), rgb(255 255 255 / 0) 45%),
+    rgb(var(--glass-tint) / var(--glass-alpha)) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--glass-hi) * .6)), 0 8px 26px -14px rgb(0 0 0 / var(--glass-drop));
+}
+.dark .bg-chip { background-color: rgb(255 255 255 / .08) !important; }
+.dark .bg-hover, .dark .hover\:bg-hover:hover { background-color: rgb(255 255 255 / .14) !important; }
+.dark .border-line { border-color: rgb(255 255 255 / .10) !important; }
+:root:not(.dark) .bg-chip { background-color: rgb(0 0 0 / .05) !important; }
+
+/* 环境光：页面背后的彩色光斑，让玻璃有可折射的内容（首页由 Hero 剧照替换） */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 15% 10%, rgb(255 94 58 / .22), transparent 70%),
+    radial-gradient(45% 40% at 85% 20%, rgb(94 92 230 / .25), transparent 70%),
+    radial-gradient(50% 45% at 60% 95%, rgb(10 132 255 / .18), transparent 70%),
+    radial-gradient(35% 30% at 5% 80%, rgb(48 209 88 / .10), transparent 70%);
+}
+:root:not(.dark) .ambient { opacity: .7; }
 
 /* 横向滚动行：隐藏滚动条，保留滚动吸附 */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -160,7 +262,17 @@ body {
 
 /* 移动端底部 Tab 栏留白 */
 @media (max-width: 639px) {
-  body.has-tabbar { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+  body.has-tabbar { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
+
+/* Hero 标题暖色渐变（参考图的橙红标题） */
+.hero-title {
+  background: linear-gradient(180deg, #ffd27a 0%, #ff8a3d 55%, #ff5a2c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 4px 18px rgba(0,0,0,.45));
 }
 
 /* 行数截断 */
@@ -260,4 +372,11 @@ body {
     width: 40px !important;
     min-width: 40px !important;
   }
+}
+
+/* 图片卡片的玻璃描边：顶部高光 + 细边，模拟液态玻璃镜面边缘 */
+.glass-rim {
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / .28),
+    inset 0 0 0 1px rgb(255 255 255 / .10);
 }

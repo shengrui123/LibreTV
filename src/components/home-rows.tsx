@@ -10,6 +10,7 @@ import type { DoubanItem } from '@/lib/types';
 import { SmartImage } from './smart-image';
 import { Icon } from './icon';
 import { useInView } from './use-in-view';
+import { useAbstract } from './home-hero';
 
 /* ------------------------------------------------------------------ */
 /* 数据 hooks                                                          */
@@ -111,16 +112,17 @@ export function PosterCard({
       className={cn('group/card relative block text-left snap-start focus-visible:outline-none', className)}
       aria-label={item.title}
     >
-      <div className="poster-lift relative aspect-[2/3] rounded-[10px] overflow-hidden bg-chip ring-1 ring-white/5 group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
+      <div className="poster-lift relative aspect-[2/3] rounded-[10px] overflow-hidden bg-chip group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
         <Cover url={item.cover} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+        <div className="glass-rim absolute inset-0 rounded-[inherit] pointer-events-none" />
         <div className="poster-sheen absolute inset-0 pointer-events-none" />
         {rank !== undefined && (
-          <span className="absolute top-1.5 left-2 text-[15px] font-bold text-white [text-shadow:0_1px_6px_rgba(0,0,0,.9)]">
+          <span className="absolute top-1 left-1.5 text-[14px] font-bold text-white [text-shadow:0_1px_6px_rgba(0,0,0,.9)]">
             {rank}
           </span>
         )}
         {item.rating && (
-          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 backdrop-blur px-1.5 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover/card:opacity-100 transition-opacity">
+          <span className="glass glass-clear absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 group-hover/card:opacity-100 transition-opacity">
             <span className="text-rating">★</span> {item.rating}
           </span>
         )}
@@ -140,14 +142,15 @@ function FeatureCard({ item, label, onOpen }: { item: DoubanItem; label: string;
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className="group/card relative block shrink-0 snap-start text-left w-[62%] sm:w-[38%] md:w-[30%] lg:w-[24%] xl:w-[20%] focus-visible:outline-none"
+      className="group/card relative block shrink-0 snap-start text-left w-[56%] sm:w-[34%] md:w-[29%] lg:w-[23%] xl:w-[19%] 2xl:w-[16%] focus-visible:outline-none"
     >
-      <div className="poster-lift relative aspect-[4/5] rounded-2xl overflow-hidden bg-chip ring-1 ring-white/5 group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
+      <div className="poster-lift relative aspect-[5/6] rounded-[18px] overflow-hidden bg-chip group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
+        <div className="glass-rim absolute inset-0 z-10 rounded-[inherit] pointer-events-none" />
         <Cover url={item.cover} alt={item.title} large className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
         <div className="poster-sheen absolute inset-0 pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 p-4">
-          <div className="text-white text-xl sm:text-2xl font-bold leading-tight line-clamp-2 [text-shadow:0_2px_10px_rgba(0,0,0,.6)]">
+          <div className="text-white text-2xl sm:text-[28px] font-black leading-tight line-clamp-2 [text-shadow:0_2px_12px_rgba(0,0,0,.6)]">
             {item.title}
           </div>
           <div className="mt-1 text-[12px] text-white/70">
@@ -164,7 +167,7 @@ function FeatureCard({ item, label, onOpen }: { item: DoubanItem; label: string;
 /* 行容器                                                              */
 /* ------------------------------------------------------------------ */
 
-export const POSTER_W = 'shrink-0 w-[30%] sm:w-[22.5%] md:w-[18.4%] lg:w-[15.3%] xl:w-[13.1%] 2xl:w-[11.4%]';
+export const POSTER_W = 'shrink-0 w-[29%] sm:w-[19%] md:w-[15.6%] lg:w-[13.2%] xl:w-[11.4%] 2xl:w-[9.9%]';
 
 export function Row({
   title,
@@ -203,7 +206,7 @@ export function Row({
 
   return (
     <section className={cn('group/row relative', className)}>
-      <h2 className="px-4 sm:px-8 lg:px-12 mb-1 text-[17px] sm:text-xl font-bold text-content tracking-tight">
+      <h2 className="px-4 sm:px-8 lg:px-12 text-[16px] sm:text-[19px] font-bold text-content tracking-tight">
         {href ? (
           <Link href={href} className="inline-flex items-center gap-0.5 hover:opacity-80 transition-opacity">
             {title}
@@ -217,7 +220,7 @@ export function Row({
         <div
           ref={scroller}
           onScroll={update}
-          className="flex gap-2.5 sm:gap-3.5 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:scroll-px-8 lg:scroll-px-12 px-4 sm:px-8 lg:px-12 py-3"
+          className="flex gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:scroll-px-8 lg:scroll-px-12 px-4 sm:px-8 lg:px-12 py-3"
         >
           {children}
         </div>
@@ -239,11 +242,11 @@ function RowArrow({ side, onClick }: { side: 'left' | 'right'; onClick: () => vo
       className={cn(
         'hidden sm:flex absolute top-3 bottom-3 w-8 lg:w-12 items-center justify-center z-10',
         'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-opacity',
-        'text-white bg-gradient-to-r',
-        side === 'left' ? 'left-0 from-black/80 to-transparent' : 'right-0 from-transparent to-black/80'
+        'text-white',
+        side === 'left' ? 'left-1' : 'right-1'
       )}
     >
-      <span className="grid place-items-center w-9 h-9 rounded-full bg-black/50 backdrop-blur ring-1 ring-white/15 hover:scale-110 transition-transform">
+      <span className="glass glass-clear grid place-items-center w-10 h-10 rounded-full hover:scale-110 transition-transform">
         <Icon name={side === 'left' ? 'chevronLeft' : 'chevronRight'} className="w-5 h-5" />
       </span>
     </button>
@@ -258,7 +261,7 @@ function RowSkeleton({ feature = false }: { feature?: boolean }) {
           key={i}
           className={cn(
             'rounded-[10px] bg-chip animate-pulse',
-            feature ? 'shrink-0 w-[62%] sm:w-[38%] md:w-[30%] lg:w-[24%] xl:w-[20%] aspect-[4/5] rounded-2xl' : cn(POSTER_W, 'aspect-[2/3]')
+            feature ? 'shrink-0 w-[56%] sm:w-[34%] md:w-[29%] lg:w-[23%] xl:w-[19%] 2xl:w-[16%] aspect-[5/6] rounded-[18px]' : cn(POSTER_W, 'aspect-[2/3]')
           )}
         />
       ))}
@@ -430,50 +433,73 @@ function ItemsRow({
 }
 
 /* ------------------------------------------------------------------ */
-/* 分类浏览                                                            */
+/* 分类磁贴：用该分类第一部作品的剧照做封面                              */
 /* ------------------------------------------------------------------ */
 
-const CATEGORIES: { label: string; sub: string; type: 'movie' | 'tv'; tag: string; bg: string }[] = [
-  { label: '华语电影', sub: 'Chinese', type: 'movie', tag: '华语', bg: 'from-[#7a1f1f] via-[#b23a2a] to-[#e0803a]' },
-  { label: '欧美大片', sub: 'Hollywood', type: 'movie', tag: '欧美', bg: 'from-[#0f2a5c] via-[#1f4fa3] to-[#4f8de0]' },
-  { label: '动画', sub: 'Animation', type: 'movie', tag: '动画', bg: 'from-[#1d6b3a] via-[#33a35a] to-[#a3d65c]' },
-  { label: '经典', sub: 'Classics', type: 'movie', tag: '经典', bg: 'from-[#3b2a14] via-[#7a5a2a] to-[#c9a35c]' },
-  { label: '美剧', sub: 'US Series', type: 'tv', tag: '美剧', bg: 'from-[#2a1458] via-[#5b2ea8] to-[#a26bf0]' },
-  { label: '韩剧', sub: 'K-Drama', type: 'tv', tag: '韩剧', bg: 'from-[#6b1446] via-[#b0306f] to-[#f07aa8]' },
-  { label: '日剧', sub: 'J-Drama', type: 'tv', tag: '日剧', bg: 'from-[#5c0f1a] via-[#a3283a] to-[#e86a6a]' },
-  { label: '国产剧', sub: 'C-Drama', type: 'tv', tag: '国产剧', bg: 'from-[#5c3a0f] via-[#b0701f] to-[#f0b44f]' },
-  { label: '日本动画', sub: 'Anime', type: 'tv', tag: '日本动画', bg: 'from-[#0f4a5c] via-[#1f8aa3] to-[#5cd6e0]' },
-  { label: '综艺', sub: 'Variety', type: 'tv', tag: '综艺', bg: 'from-[#5c0f4a] via-[#a31f8a] to-[#e05cc9]' },
-  { label: '纪录片', sub: 'Documentary', type: 'tv', tag: '纪录片', bg: 'from-[#1a2a1a] via-[#3a5a3a] to-[#7a9a6a]' },
-  { label: '冷门佳片', sub: 'Hidden Gems', type: 'movie', tag: '冷门佳片', bg: 'from-[#1a1a2e] via-[#3a3a6e] to-[#7a7ad6]' },
+type Category = { label: string; sub: string; type: 'movie' | 'tv'; tag: string; tint: string };
+
+export const MOVIE_CATEGORIES: Category[] = [
+  { label: '豆瓣高分', sub: 'Top Rated', type: 'movie', tag: '豆瓣高分', tint: 'from-amber-500/40' },
+  { label: '经典', sub: 'Classics', type: 'movie', tag: '经典', tint: 'from-yellow-700/40' },
+  { label: '冷门佳片', sub: 'Hidden Gems', type: 'movie', tag: '冷门佳片', tint: 'from-indigo-500/40' },
+  { label: '动画', sub: 'Animation', type: 'movie', tag: '动画', tint: 'from-emerald-500/40' },
+  { label: '华语', sub: 'Chinese', type: 'movie', tag: '华语', tint: 'from-red-600/40' },
+  { label: '欧美', sub: 'Hollywood', type: 'movie', tag: '欧美', tint: 'from-blue-600/40' },
+  { label: '韩国', sub: 'Korean', type: 'movie', tag: '韩国', tint: 'from-pink-500/40' },
+  { label: '日本', sub: 'Japanese', type: 'movie', tag: '日本', tint: 'from-rose-500/40' },
 ];
 
-export function CategoryRow() {
+export const TV_CATEGORIES: Category[] = [
+  { label: '美剧', sub: 'US', type: 'tv', tag: '美剧', tint: 'from-violet-600/40' },
+  { label: '英剧', sub: 'UK', type: 'tv', tag: '英剧', tint: 'from-sky-600/40' },
+  { label: '韩剧', sub: 'K-Drama', type: 'tv', tag: '韩剧', tint: 'from-pink-500/40' },
+  { label: '日剧', sub: 'J-Drama', type: 'tv', tag: '日剧', tint: 'from-red-500/40' },
+  { label: '国产剧', sub: 'C-Drama', type: 'tv', tag: '国产剧', tint: 'from-orange-500/40' },
+  { label: '港剧', sub: 'HK', type: 'tv', tag: '港剧', tint: 'from-teal-500/40' },
+  { label: '日本动画', sub: 'Anime', type: 'tv', tag: '日本动画', tint: 'from-cyan-500/40' },
+  { label: '综艺', sub: 'Variety', type: 'tv', tag: '综艺', tint: 'from-fuchsia-500/40' },
+  { label: '纪录片', sub: 'Docs', type: 'tv', tag: '纪录片', tint: 'from-lime-600/40' },
+];
+
+export function CategoryRow({ title, categories }: { title: string; categories: Category[] }) {
   return (
-    <Row title="按分类浏览">
-      {CATEGORIES.map((c) => (
-        <Link
-          key={c.label}
-          href={`/?browse=${c.type}&tag=${encodeURIComponent(c.tag)}`}
-          className="group/card shrink-0 snap-start w-[46%] sm:w-[31%] md:w-[24%] lg:w-[19%] xl:w-[16%] focus-visible:outline-none"
-        >
-          <div
-            className={cn(
-              'poster-lift relative aspect-[16/10] rounded-xl overflow-hidden bg-gradient-to-br ring-1 ring-white/5 group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content',
-              c.bg
-            )}
-          >
-            <div className="absolute -right-6 -top-8 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
-            <span className="absolute right-3 top-2 text-[11px] font-semibold uppercase tracking-widest text-white/50">
-              {c.sub}
-            </span>
-            <span className="absolute left-3 bottom-2.5 text-white text-[17px] font-bold [text-shadow:0_1px_8px_rgba(0,0,0,.35)]">
-              {c.label}
-            </span>
-            <div className="poster-sheen absolute inset-0" />
-          </div>
-        </Link>
-      ))}
-    </Row>
+    <LazyRow minHeight={170}>
+      {(visible) => (
+        <Row title={title}>
+          {categories.map((c) => (
+            <CategoryTile key={c.label} c={c} visible={visible} />
+          ))}
+        </Row>
+      )}
+    </LazyRow>
+  );
+}
+
+function CategoryTile({ c, visible }: { c: Category; visible: boolean }) {
+  const list = useDoubanList(c.type, c.tag, visible);
+  const first = list.data?.[0];
+  const abs = useAbstract(visible ? first : null);
+  const still = abs.data?.stills?.[0];
+  return (
+    <Link
+      href={`/?browse=${c.type}&tag=${encodeURIComponent(c.tag)}`}
+      className="group/card shrink-0 snap-start w-[46%] sm:w-[30%] md:w-[23%] lg:w-[19%] xl:w-[16%] 2xl:w-[14%] focus-visible:outline-none"
+    >
+      <div className="poster-lift relative aspect-[16/10] rounded-[14px] overflow-hidden bg-chip group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
+        {still ? (
+          <Cover url={still} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : first ? (
+          <Cover url={first.cover} alt="" className="absolute inset-0 w-full h-full object-cover object-[center_25%] scale-110 blur-[2px]" />
+        ) : null}
+        <div className={cn('absolute inset-0 bg-gradient-to-tr via-transparent to-transparent', c.tint)} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+        <div className="glass-rim absolute inset-0 rounded-[inherit]" />
+        <span className="absolute right-2.5 top-2 text-[10px] font-bold uppercase tracking-widest text-white/60">{c.sub}</span>
+        <span className="absolute left-3 bottom-2.5 text-white text-[16px] font-bold [text-shadow:0_1px_8px_rgba(0,0,0,.5)]">
+          {c.label}
+        </span>
+        <div className="poster-sheen absolute inset-0" />
+      </div>
+    </Link>
   );
 }

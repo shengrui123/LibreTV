@@ -254,4 +254,6 @@ export interface DoubanAbstract {
   comment?: string;
   /** 剧情简介 */
   intro?: string;
+  /** 横版剧照（大图） */
+  stills?: string[];
 }

@@ -42,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <div className="ambient" aria-hidden />
         <Providers>{children}</Providers>
       </body>
     </html>
