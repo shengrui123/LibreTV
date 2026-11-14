@@ -51,7 +51,6 @@ const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
 const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> = {
   sources: [
     { id: 'vod', label: '点播源' },
-    { id: 'live', label: '直播源' },
     { id: 'subs', label: '数据源订阅' },
   ],
   prefs: [

@@ -261,7 +261,6 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
               <SideLink href="/?search=1" icon="search" active={active === 'search'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>搜索</SideLink>
               <SideLink href="/?browse=movie" icon="film" active={active === 'movie'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>电影</SideLink>
               <SideLink href="/?browse=tv" icon="tv" active={active === 'tv'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>剧集</SideLink>
-              <SideLink href="/live" icon="bolt" active={active === 'live'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>直播</SideLink>
             </nav>
             <div className="my-3 mx-2 h-px bg-line" />
             <div className="flex flex-col gap-0.5">
@@ -284,11 +283,10 @@ function HeaderInner({ showSearch = false, transparent = false }: { showSearch?:
         aria-label="底部导航"
         className="sm:hidden fixed z-40 inset-x-4 bottom-[calc(12px+env(safe-area-inset-bottom))] glass rounded-full p-1"
       >
-        <div className="grid grid-cols-5 h-[56px]">
+        <div className="grid grid-cols-4 h-[56px]">
           <TabItem href="/" icon="home" active={active === 'home'}>首页</TabItem>
           <TabItem href="/?browse=movie" icon="film" active={active === 'movie'}>电影</TabItem>
           <TabItem href="/?browse=tv" icon="tv" active={active === 'tv'}>剧集</TabItem>
-          <TabItem href="/live" icon="bolt" active={active === 'live'}>直播</TabItem>
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
