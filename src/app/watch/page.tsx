@@ -70,14 +70,15 @@ function AutoResolve() {
   }, []);
   const title = params.get('title') || '';
   const episodeName = params.get('episodeName') || '';
+  const episodeNumber = Number(params.get('episodeNumber')) || 0;
   const index = Math.max(0, parseInt(params.get('index') || '0', 10) || 0);
   const sourceKey = params.get('source') || '';
   const vodId = params.get('id') || '';
   const sourceUrl = params.get('sourceUrl') || '';
   const detailUrl = params.get('detail') || '';
-  const normalize = (value: string) => value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase();
+  const normalize = (value: string) => value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase().replace(/第([一二三四五六七八九十]+)季/g, (_, n: string) => { const d: Record<string, number> = {一:1,二:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9}; const p=n.split('十'); return `第${p.length===2?(d[p[0]]||1)*10+(d[p[1]]||0):d[n]}季`; });
   const query = useQuery({
-    queryKey: ['auto-play', title, episodeName, index, sourceKey, vodId, sourceUrl, detailUrl, selectedKeys],
+    queryKey: ['auto-play', title, episodeName, episodeNumber, index, sourceKey, vodId, sourceUrl, detailUrl, selectedKeys],
     enabled: !!verified && hydrated,
     retry: false, staleTime: 0,
     queryFn: async ({ signal }) => {
@@ -88,13 +89,14 @@ function AutoResolve() {
       if (hinted && validateSourceUrl(hinted.url) && !isSourceDisabled(state, hinted.key) && !isInDisabledSubscription(state, hinted.key) && !sources.some((source) => source.key === hinted.key)) sources.push(hinted);
       if (!sources.length) throw new Error('请先在设置中添加并启用点播源');
       const result = await api.search(title, sources, state.yellowFilter, { signal }).catch((error) => { if (signal.aborted || !hinted) throw error; return { list: [] }; });
-      const candidates: { source: SourceConfig; id: string }[] = result.list.filter((item) => normalize(item.name) === normalize(title)).flatMap((item) => { const source = sources.find((entry) => entry.key === item.sourceKey); return source ? [{ source, id: item.vodId }] : []; });
+      const candidates: { source: SourceConfig; id: string }[] = result.list.filter((item) => normalize(item.name) === normalize(title) || (/第1季$/.test(normalize(title)) && normalize(item.name) === normalize(title).replace(/第1季$/, ''))).flatMap((item) => { const source = sources.find((entry) => entry.key === item.sourceKey); return source ? [{ source, id: item.vodId }] : []; });
       if (hinted && vodId && sources.some((source) => source.key === hinted.key)) candidates.push({ source: hinted, id: vodId });
       const unique = candidates.filter((candidate, i) => candidates.findIndex((other) => other.source.key === candidate.source.key && other.id === candidate.id) === i);
       const probes = await Promise.all(unique.map(async (candidate) => {
         const probe = await api.detailSpeed(candidate.id, candidate.source, signal);
         if (!probe.ok || !probe.detail) return null;
-        const namedIndex = episodeName ? probe.detail.episodeNames?.findIndex((name) => normalize(name) === normalize(episodeName)) ?? -1 : index;
+        const numberedIndex = episodeNumber ? probe.detail.episodeNames?.findIndex((name) => new RegExp(`^第0*${episodeNumber}[集期](?:上|$)`).test(name.trim())) ?? -1 : -1;
+        const namedIndex = episodeNumber ? numberedIndex : episodeName ? probe.detail.episodeNames?.findIndex((name) => normalize(name) === normalize(episodeName)) ?? -1 : index;
         return namedIndex >= 0 && probe.detail.episodes[namedIndex] ? { ...candidate, index: namedIndex, ms: probe.ms } : null;
       }));
       const available = probes.filter((entry): entry is NonNullable<typeof entry> => entry !== null);

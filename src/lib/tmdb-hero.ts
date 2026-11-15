@@ -13,14 +13,16 @@ export function matchTmdbMovie(results: SearchResult[], title: string, year: str
 
 export async function fetchTmdbHero(id: string): Promise<TmdbHero | null> {
   const token = process.env.TMDB_READ_ACCESS_TOKEN;
-  if (!token) return null;
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!token && !apiKey) return null;
   const key = `tmdb-hero:${id}`;
   const cached = getCache<TmdbHero>(key);
   if (cached) return cached;
   const subject = await fetchDoubanAbstract(id);
   if (!subject.title || !subject.year || !/^\d{4}$/.test(subject.year)) return null;
-  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+  const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), Accept: 'application/json' };
   const params = new URLSearchParams({ query: subject.title, language: 'zh-CN', year: subject.year });
+  if (apiKey) params.set('api_key', apiKey);
   const search = await fetchUpstream(`https://api.themoviedb.org/3/search/movie?${params}`, { headers, timeoutMs: 5000, safeRedirects: false, redirect: 'error' });
   if (!search.ok) return null;
   const data = await search.json() as { results?: SearchResult[] };
@@ -29,7 +31,7 @@ export async function fetchTmdbHero(id: string): Promise<TmdbHero | null> {
   const score = typeof movie.vote_average === 'number' && movie.vote_average > 0 && movie.vote_average <= 10 && (movie.vote_count ?? 0) > 0 ? movie.vote_average.toFixed(1) : undefined;
   let logo: string | undefined;
   try {
-    const response = await fetchUpstream(`https://api.themoviedb.org/3/movie/${movie.id}/images?include_image_language=zh,en,null`, { headers, timeoutMs: 5000, safeRedirects: false, redirect: 'error' });
+    const response = await fetchUpstream(`https://api.themoviedb.org/3/movie/${movie.id}/images?include_image_language=zh,en,null${apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : ''}`, { headers, timeoutMs: 5000, safeRedirects: false, redirect: 'error' });
     if (response.ok) {
       const images = await response.json() as { logos?: { file_path?: string; iso_639_1?: string | null; vote_count?: number }[] };
       const logos = (images.logos ?? []).filter((x) => typeof x.file_path === 'string' && /^\/[a-zA-Z0-9_-]+\.(png|webp)$/.test(x.file_path));
