@@ -83,13 +83,16 @@ function ShareButton({ title }: { title: string }) {
 const normalizeTitle = (value: string) => value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase();
 
 /** 从可播放的视频中截取画面；无法跨域读取或分辨率不足时保留海报。 */
+const episodeFrameCache = new Map<string, string[]>();
+
 function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
   const [frames, setFrames] = useState<string[]>([]);
   const { verified } = useAuth();
   const sourceKeys = useAppStore((state) => state.selectedKeys);
   useEffect(() => {
-    setFrames([]);
-    if (!verified || !enabled) return;
+    const cached = episodeUrl ? episodeFrameCache.get(episodeUrl) : undefined;
+    setFrames(cached || []);
+    if (cached || !verified || !enabled) return;
     const controller = new AbortController();
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -149,7 +152,10 @@ function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
             canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
             images.push(canvas.toDataURL('image/jpeg', 0.8));
           }
-          if (!controller.signal.aborted) setFrames(images);
+          if (!controller.signal.aborted) {
+            if (episodeUrl) { if (episodeFrameCache.size >= 30) episodeFrameCache.delete(episodeFrameCache.keys().next().value!); episodeFrameCache.set(episodeUrl, images); }
+            setFrames(images);
+          }
           return;
         } catch { hls?.destroy(); hls = undefined; video.removeAttribute('src'); video.load(); }
       }
@@ -162,6 +168,7 @@ function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
 function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () => void }) {
   const router = useRouter();
   const { toast } = useToast();
+  const [introOpen, setIntroOpen] = useState(false);
   const [trailer, setTrailer] = useState<{ id: string; title: string } | null>(null);
   useEffect(() => {
     if (!trailer) return;
@@ -213,7 +220,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
             </h1>
           ) : <h1 className="hero-title text-4xl sm:text-5xl lg:text-[56px] font-black leading-tight">{item.title}</h1>}
           <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>
-          {a?.intro && <p className="mt-4 text-sm sm:text-base leading-relaxed text-white/75 line-clamp-3">{a.intro}</p>}
+          {a?.intro && <button type="button" onClick={() => setIntroOpen(true)} className="mt-4 block text-left text-sm sm:text-base leading-relaxed text-white/75 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white rounded"><span className="line-clamp-3">{a.intro}</span></button>}
           {(rating || tmdb.data?.score) && <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-white">{rating && <span>豆瓣 {rating}</span>}{tmdb.data?.score && <span>TMDB {tmdb.data.score}</span>}</p>}
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
             <button onClick={() => playNow()} className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90"><Icon name="play" className="w-4 h-4" /> 立即播放</button>
@@ -232,9 +239,9 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
         {stills.length > 1 && <section aria-label="影片剧照"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">影片剧照</h2><div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{stills.map((url, i) => <div key={`${url}-${i}`} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl overflow-hidden bg-chip snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Cover url={url} alt="" className="w-full h-full object-cover" /></div>)}</div></section>}
         {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
-        {(a?.intro || a?.comment) && <section className="px-4 sm:px-8 lg:px-12 max-w-4xl"><h2 className="text-xl sm:text-2xl font-bold mb-4">简介</h2>{a.intro && <p className="text-muted leading-relaxed whitespace-pre-wrap">{a.intro}</p>}{a.comment && <blockquote className="mt-4 text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>}</section>}
         {!!extras.data?.items.length && <Row title="相关推荐">{extras.data.items.map((recommendation) => <PosterCard key={recommendation.id} item={recommendation} className={POSTER_W} showTitle onOpen={(picked) => router.push(buildRecommendationDetailUrl(picked, window.location.pathname + window.location.search))} />)}</Row>}
       </div>
+      {introOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="影片简介" onClick={() => setIntroOpen(false)} onKeyDown={(event) => { if (event.key === 'Escape') setIntroOpen(false); }}><div className="glass glass-thick rounded-3xl w-full max-w-xl max-h-[75vh] overflow-y-auto p-6 text-content" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between gap-4 mb-4"><h2 className="text-xl font-bold">简介</h2><button autoFocus type="button" aria-label="关闭简介" className="btn-icon-glass" onClick={() => setIntroOpen(false)}><Icon name="close" className="w-5 h-5" /></button></div><p className="whitespace-pre-wrap leading-relaxed">{a?.intro}</p>{a?.comment && <blockquote className="mt-4 text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>}</div></div>}
       {trailer && <div className="fixed inset-0 z-[100] bg-black/85 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={trailer.title} onClick={() => setTrailer(null)}><div className="relative w-full max-w-4xl" onClick={(event) => event.stopPropagation()}><button type="button" className="btn-icon-glass absolute -top-12 right-0" aria-label="关闭预告片" onClick={() => setTrailer(null)}><Icon name="close" className="w-5 h-5" /></button><video className="w-full max-h-[75vh] rounded-2xl bg-black" src={`/api/douban/trailer?id=${encodeURIComponent(trailer.id)}`} controls autoPlay playsInline onError={() => toast('预告片暂不可用，请稍后重试', 'warning')} /></div></div>}
     </article>
   );
