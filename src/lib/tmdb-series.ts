@@ -4,6 +4,7 @@ export interface SeriesMetadata {
   id: number;
   baseTitle: string;
   season: number;
+  score?: string;
   images: string[];
   seasons: { number: number; name: string; count: number }[];
   episodes: { number: number; name: string; overview?: string; image?: string; date?: string; runtime?: number; rating?: number }[];
@@ -23,7 +24,7 @@ export async function fetchSeriesMetadata(title: string, year: string, selected?
   if (!token && !apiKey) return null;
   const parsed = splitSeason(title);
   const season = selected ?? parsed.season;
-  const key = `tmdb-series-v2:${title}:${year}:${season}`;
+  const key = `tmdb-series-v3:${title}:${year}:${season}`;
   const cached = getCache<SeriesMetadata>(key);
   if (cached) return cached;
   const get = async (path: string) => {
@@ -41,6 +42,7 @@ export async function fetchSeriesMetadata(title: string, year: string, selected?
   const data = await get(`tv/${id}/season/${season}?language=zh-CN`);
   const result: SeriesMetadata = {
     id, baseTitle: parsed.base, season,
+    score: typeof show.vote_average === 'number' && show.vote_average > 0 && show.vote_average <= 10 && show.vote_count > 0 ? show.vote_average.toFixed(1) : undefined,
     images: (show.images?.backdrops ?? []).filter((x: { file_path?: string; width?: number }) => typeof x.file_path === 'string' && /^\/[\w-]+\.(jpg|png|webp)$/.test(x.file_path) && (x.width ?? 0) >= 1280).slice(0, 10).map((x: { file_path: string }) => `https://image.tmdb.org/t/p/original${x.file_path}`),
     seasons: (show.seasons ?? []).filter((x: { season_number: number }) => x.season_number > 0).map((x: { season_number: number; name: string; episode_count: number }) => ({ number: x.season_number, name: x.name, count: x.episode_count })),
     episodes: (data.episodes ?? []).map((x: { episode_number: number; name: string; overview?: string; still_path?: string; air_date?: string; runtime?: number; vote_average?: number }) => ({ number: x.episode_number, name: x.name, overview: x.overview || undefined, image: x.still_path && /^\/[\w-]+\.(jpg|png|webp)$/.test(x.still_path) ? `https://image.tmdb.org/t/p/w1280${x.still_path}` : undefined, date: x.air_date || undefined, runtime: x.runtime && x.runtime > 0 ? x.runtime : undefined, rating: x.vote_average && x.vote_average > 0 ? x.vote_average : undefined })),
