@@ -229,7 +229,8 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   const stills = a?.stills ?? [];
   const tmdbSeries = useTmdbSeriesMetadata(item.title, a?.year, undefined, !!a?.year && (!!item.isTv || !!a?.episodes));
   const tmdbImages = [...(tmdbSeries.data?.images ?? []), ...(tmdbSeries.data?.episodes.flatMap((episode) => episode.image ? [episode.image] : []) ?? [])];
-  const heroImages = tmdbImages.length ? [...new Set(tmdbImages)] : stills;
+  const frames = useVideoFrames(item.title);
+  const heroImages = [...new Set([...frames, ...tmdbImages, ...stills])];
   const heroIndex = stillIndex % Math.max(heroImages.length, 1);
   useEffect(() => {
     if (heroImages.length < 2) return;
