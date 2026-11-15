@@ -85,6 +85,28 @@ const normalizeTitle = (value: string) => value.normalize('NFKC').replace(/\s+/g
 /** 从可播放的视频中截取画面；无法跨域读取或分辨率不足时保留海报。 */
 const episodeFrameCache = new Map<string, string[]>();
 
+async function frameCacheKey(url: string) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url));
+  return `${window.location.origin}/__episode-frames/${Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function readSavedFrame(url: string): Promise<string[] | undefined> {
+  try {
+    const cache = await caches.open('libretv-episode-frames-v1');
+    const response = await cache.match(await frameCacheKey(url));
+    if (response && Date.now() - Number(response.headers.get('x-saved-at')) < 7 * 86400000) return await response.json();
+  } catch { /* 缓存不可用时按需提取 */ }
+}
+
+async function saveFrame(url: string, images: string[]) {
+  try {
+    const cache = await caches.open('libretv-episode-frames-v1');
+    await cache.put(await frameCacheKey(url), new Response(JSON.stringify(images), { headers: { 'Content-Type': 'application/json', 'x-saved-at': String(Date.now()) } }));
+    const keys = await cache.keys();
+    await Promise.all(keys.slice(0, Math.max(0, keys.length - 60)).map((key) => cache.delete(key)));
+  } catch { /* 配额不足不影响图片显示 */ }
+}
+
 function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
   const [frames, setFrames] = useState<string[]>([]);
   const { verified } = useAuth();
@@ -115,6 +137,11 @@ function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
       controller.signal.addEventListener('abort', fail, { once: true });
     });
     void (async () => {
+      if (episodeUrl) {
+        const saved = await readSavedFrame(episodeUrl);
+        if (controller.signal.aborted) return;
+        if (saved?.length) { episodeFrameCache.set(episodeUrl, saved); setFrames(saved); return; }
+      }
       const state = useAppStore.getState();
       const sources = [...new Set(state.selectedKeys)].map((key) => resolveSource(state, key)).filter((source): source is SourceConfig => !!source && validateSourceUrl(source.url) && !isSourceDisabled(state, source.key) && !isInDisabledSubscription(state, source.key));
       const matches = episodeUrl ? [] : (sources.length ? (await api.search(title, sources, state.yellowFilter, { signal: controller.signal })).list.filter((item) => normalizeTitle(item.name) === normalizeTitle(title)) : []);
@@ -153,7 +180,7 @@ function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
             images.push(canvas.toDataURL('image/jpeg', 0.8));
           }
           if (!controller.signal.aborted) {
-            if (episodeUrl) { if (episodeFrameCache.size >= 30) episodeFrameCache.delete(episodeFrameCache.keys().next().value!); episodeFrameCache.set(episodeUrl, images); }
+            if (episodeUrl) { if (episodeFrameCache.size >= 30) episodeFrameCache.delete(episodeFrameCache.keys().next().value!); episodeFrameCache.set(episodeUrl, images); void saveFrame(episodeUrl, images); }
             setFrames(images);
           }
           return;
@@ -326,6 +353,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
   const { verified } = useAuth();
   const { toast } = useToast();
   const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
+  const [introOpen, setIntroOpen] = useState(false);
   const [reversed, setReversed] = useState(false);
   const frames = useVideoFrames(title);
   const [frameIndex, setFrameIndex] = useState(0);
@@ -380,7 +408,7 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
           <h1 className="hero-title text-4xl sm:text-5xl lg:text-[56px] font-black leading-tight break-words">{title}</h1>
           <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>
           <p className="mt-2 text-sm text-white/70">{source?.name || sourceName}</p>
-          {description && <p className="mt-4 text-sm sm:text-base text-white/75 leading-relaxed line-clamp-3">{description}</p>}
+          {description && <button type="button" className="mt-4 block text-left text-sm sm:text-base text-white/75 leading-relaxed" onClick={() => setIntroOpen(true)}><span className="line-clamp-3">{description}</span></button>}
           <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => play(0)}><Icon name="play" className="w-4 h-4" /> 立即播放</button>}<ShareButton title={title} /></div>
         </div>
       </DetailHero>
@@ -392,8 +420,8 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">{episodes.map((_, i) => reversed ? episodes.length - 1 - i : i).map((index) => <button key={index} className="btn-ghost btn-sm" onClick={() => play(index)}>{index + 1}</button>)}</div>
         </section> : detail ? <EmptyState icon="alert" title="未找到播放资源" description="请尝试其他视频" /> : null}
         {(info?.director || info?.actor) && <section className="mt-10"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="glass glass-thick rounded-2xl p-5 text-sm space-y-2">{info.director && <p><span className="text-faint">导演 </span>{info.director}</p>}{info.actor && <p><span className="text-faint">主演 </span>{info.actor}</p>}</div></section>}
-        {description && <section className="mt-10 max-w-4xl"><h2 className="text-xl sm:text-2xl font-bold mb-4">简介</h2><p className="text-muted leading-relaxed whitespace-pre-wrap">{description}</p></section>}
       </div>
+      {introOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="影片简介" onClick={() => setIntroOpen(false)} onKeyDown={(event) => { if (event.key === 'Escape') setIntroOpen(false); }}><div className="glass glass-thick rounded-3xl w-full max-w-xl max-h-[75vh] overflow-y-auto p-6 text-content" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between gap-4 mb-4"><h2 className="text-xl font-bold">简介</h2><button autoFocus type="button" aria-label="关闭简介" className="btn-icon-glass" onClick={() => setIntroOpen(false)}><Icon name="close" className="w-5 h-5" /></button></div><p className="whitespace-pre-wrap leading-relaxed">{description}</p></div></div>}
     </article>
   );
 }
