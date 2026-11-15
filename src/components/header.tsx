@@ -9,6 +9,7 @@ import { requestShowDownloadManager } from './download-manager';
 import { Icon, type IconName } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
+import { AboutDialog } from './about-dialog';
 
 const SourceManagerDrawer = dynamic(() => import('./source-manager').then((mod) => mod.SourceManagerDrawer));
 
@@ -32,6 +33,7 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -270,7 +272,7 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
               <SideAction icon="clock" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); router.push('/history'); }}>观看历史</SideAction>
               <SideAction icon="download" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); requestShowDownloadManager(); }}>下载管理</SideAction>
               <SideAction icon="gear" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setSettingsOpen(true); }}>设置</SideAction>
-              <SideLink href="/about" icon="info" active={active === 'about'} onNavigate={() => setSidebarOpen(false)} tab={sidebarOpen}>关于</SideLink>
+              <SideAction icon="info" tab={sidebarOpen} onClick={() => { setSidebarOpen(false); setAboutOpen(true); }}>关于</SideAction>
             </div>
           </div>
           <div className="glass glass-clear mt-3 flex shrink-0 items-center justify-between rounded-2xl px-3 py-2">
@@ -300,6 +302,7 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
         </div>
       </nav>
 
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
       {(settingsOpen || settingsLoaded) && <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
     </>
   );
