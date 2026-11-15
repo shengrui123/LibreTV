@@ -19,7 +19,7 @@ export function useTmdbSeriesMetadata(title: string, year?: string, selected?: n
   });
 }
 
-export function TmdbSeriesPanel({ title, year, children }: { title: string; year?: string; children: ReactNode }) {
+export function TmdbSeriesPanel({ title, year, children, onPlay }: { title: string; year?: string; children: ReactNode; onPlay?: (index: number) => void }) {
   const [selected, setSelected] = useState<number>();
   const router = useRouter();
   const query = useTmdbSeriesMetadata(title, year, selected);
@@ -28,6 +28,7 @@ export function TmdbSeriesPanel({ title, year, children }: { title: string; year
   return <section aria-label="分季与分集资料">
     <div className="px-4 sm:px-8 lg:px-12 flex gap-3 overflow-x-auto no-scrollbar pb-4">{data.seasons.map((season) => <button key={season.number} type="button" aria-pressed={season.number === data.season} className={season.number === data.season ? 'btn-hero shrink-0' : 'btn-ghost shrink-0'} onClick={() => setSelected(season.number)}>第 {season.number} 季 · {season.count} 集</button>)}</div>
     <div className="px-4 sm:px-8 lg:px-12"><div className="flex gap-3 overflow-x-auto no-scrollbar py-2 snap-x">{data.episodes.map((episode) => <button key={episode.number} type="button" className="relative shrink-0 w-[80%] sm:w-[42%] lg:w-[28%] min-h-72 aspect-[6/5] rounded-2xl overflow-hidden bg-chip text-left snap-start focus-visible:ring-2 focus-visible:ring-accent" aria-label={`播放第 ${data.season} 季第 ${episode.number} 集`} onClick={() => {
+      if (onPlay && selected === undefined) { onPlay(episode.number - 1); return; }
       const playTitle = selected === undefined ? title : `${data.baseTitle} 第${data.season}季`;
       router.push(`/watch?${new URLSearchParams({ auto: '1', title: playTitle, index: String(episode.number - 1), episodeNumber: String(episode.number) })}`);
     }}>

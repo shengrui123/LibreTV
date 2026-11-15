@@ -208,11 +208,12 @@ export function Drawer({
 
   return (
     // 非模态时容器只用于定位：pointer-events-none 让抽屉以外的点击穿透到页面
-    <div className={cn('fixed inset-0 z-50', centered && 'flex items-center justify-center p-4 sm:p-6', !modal && 'pointer-events-none')}>
+    <div className={cn('fixed inset-0 z-50', centered && 'flex items-center justify-center p-3 sm:p-6', !modal && 'pointer-events-none')}>
       {modal && (
         <div
           className={cn(
             'absolute inset-0 bg-black/60 transition-opacity duration-200',
+            centered && 'bg-black/65',
             entered ? 'opacity-100' : 'opacity-0'
           )}
           onClick={closeOnOverlay ? onClose : undefined}
@@ -226,17 +227,17 @@ export function Drawer({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          centered ? 'relative w-full h-[85dvh] max-h-[85dvh] glass glass-thick rounded-3xl border border-line flex flex-col outline-none overflow-hidden' : 'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none overflow-hidden',
+          centered ? 'relative w-full h-[min(760px,85dvh)] max-h-[calc(100dvh-24px)] glass glass-thick rounded-3xl flex flex-col text-content outline-none overflow-hidden' : 'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none overflow-hidden',
           // 液态玻璃：桌面端悬浮圆角面板，四周留出 12px
           !centered && 'lg:top-3 lg:right-3 lg:h-[calc(100%-24px)] lg:rounded-[28px] lg:border lg:border-white/10 lg:shadow-[inset_0_1px_0_rgb(255_255_255/.25),0_30px_80px_-20px_rgb(0_0_0/.7)]',
-          'transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
+          'transition-[transform,opacity] duration-200 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none',
           width,
           !modal && 'pointer-events-auto shadow-2xl',
           // 小屏底部抽屉：占下半屏、贴底、顶部圆角，留出上半屏给画面
-          mobileSheet &&
+          !centered && mobileSheet &&
             'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-auto max-lg:max-h-[60vh] max-lg:max-w-none max-lg:rounded-t-[28px] max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
           // 近全屏底部面板：单列设置项在手机上需要完整高度可用
-          mobileFull &&
+          !centered && mobileFull &&
             'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-[92dvh] max-lg:max-h-[92dvh] max-lg:max-w-none max-lg:rounded-t-[28px] max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
           centered ? (entered ? 'opacity-100 scale-100' : 'opacity-0 scale-95') : entered
             ? 'translate-x-0 max-lg:translate-y-0'
@@ -244,7 +245,7 @@ export function Drawer({
         )}
         style={panelStyle}
       >
-        {mobileFull && (
+        {!centered && mobileFull && (
           /* 顶部把手：按住下滑可关闭面板（阈值见 DRAG_CLOSE_PX），仅近全屏移动形态出现。
              touch-none 让浏览器把这段手势交给我们而不是拿去滚动页面。 */
           <div
@@ -258,21 +259,22 @@ export function Drawer({
             <span className="h-1 w-10 rounded-full bg-line" />
           </div>
         )}
-        <div className="shrink-0 px-4 py-2.5 border-b border-line flex items-center justify-between">
-          <h2 className="font-semibold text-content">{title}</h2>
+        <div className={cn("shrink-0 flex items-center justify-between gap-4", centered ? "px-5 pt-5 pb-4 sm:px-7 sm:pt-7" : "px-4 py-2.5 border-b border-line")}>
+          <h2 className={cn("font-semibold text-content", centered && "text-xl font-bold")}>{title}</h2>
           <button
-            className="p-1.5 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+            type="button"
+            className={centered ? "btn-icon-glass" : "p-1.5 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"}
             onClick={onClose}
             aria-label="关闭"
           >
-            <Icon name="close" />
+            <Icon name="close" className={centered ? "w-5 h-5" : undefined} />
           </button>
         </div>
-        {subheader && <div className="shrink-0 px-4 py-2.5 border-b border-line bg-surface-raised">{subheader}</div>}
+        {subheader && <div className={cn("shrink-0", centered ? "px-5 pb-4 sm:px-7" : "px-4 py-2.5 border-b border-line bg-surface-raised")}>{subheader}</div>}
         {/* 唯一滚动区：内容再长也只在这一层滚动，避免与列表内滚形成嵌套滚动 */}
         <div
           ref={contentRef}
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin px-4 pt-4 pb-6 max-lg:pt-3 max-lg:pb-3"
+          className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin", centered ? "px-5 pt-1 pb-5 sm:px-7 sm:pb-7" : "px-4 pt-4 pb-6 max-lg:pt-3 max-lg:pb-3")}
         >
           {children}
         </div>

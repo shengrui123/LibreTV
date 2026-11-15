@@ -33,7 +33,7 @@ import { AUTO_REFRESH_MAX_FAIL_STREAK, syncSourceSubscription } from '@/lib/subs
 import { describeParseStats } from '@/lib/tvbox-parser';
 
 /**
- * 设置抽屉：顶部两级导航。
+ * 设置弹窗：顶部两级导航。
  * - 一级按性质分组：源管理 / 偏好设置 / 数据；
  * - 二级为该分组下的具体面板，每次只渲染一类内容，避免源很多时长距离滚动。
  * 选中位置记忆到 localStorage，再次打开回到上次所在面板。
