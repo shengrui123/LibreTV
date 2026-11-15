@@ -37,7 +37,9 @@ export function Drawer({
   mobileSheet = false,
   mobileFull = false,
   panelStyle,
+  centered = false,
 }: {
+  centered?: boolean;
   open: boolean;
   onClose: () => void;
   title: string;
@@ -206,7 +208,7 @@ export function Drawer({
 
   return (
     // 非模态时容器只用于定位：pointer-events-none 让抽屉以外的点击穿透到页面
-    <div className={cn('fixed inset-0 z-50', !modal && 'pointer-events-none')}>
+    <div className={cn('fixed inset-0 z-50', centered && 'flex items-center justify-center p-4 sm:p-6', !modal && 'pointer-events-none')}>
       {modal && (
         <div
           className={cn(
@@ -224,9 +226,9 @@ export function Drawer({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none overflow-hidden',
+          centered ? 'relative w-full h-[85dvh] max-h-[85dvh] glass glass-thick rounded-3xl border border-line flex flex-col outline-none overflow-hidden' : 'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none overflow-hidden',
           // 液态玻璃：桌面端悬浮圆角面板，四周留出 12px
-          'lg:top-3 lg:right-3 lg:h-[calc(100%-24px)] lg:rounded-[28px] lg:border lg:border-white/10 lg:shadow-[inset_0_1px_0_rgb(255_255_255/.25),0_30px_80px_-20px_rgb(0_0_0/.7)]',
+          !centered && 'lg:top-3 lg:right-3 lg:h-[calc(100%-24px)] lg:rounded-[28px] lg:border lg:border-white/10 lg:shadow-[inset_0_1px_0_rgb(255_255_255/.25),0_30px_80px_-20px_rgb(0_0_0/.7)]',
           'transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
           width,
           !modal && 'pointer-events-auto shadow-2xl',
@@ -236,7 +238,7 @@ export function Drawer({
           // 近全屏底部面板：单列设置项在手机上需要完整高度可用
           mobileFull &&
             'max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-[92dvh] max-lg:max-h-[92dvh] max-lg:max-w-none max-lg:rounded-t-[28px] max-lg:border-t max-lg:border-l-0 max-lg:pb-[env(safe-area-inset-bottom)]',
-          entered
+          centered ? (entered ? 'opacity-100 scale-100' : 'opacity-0 scale-95') : entered
             ? 'translate-x-0 max-lg:translate-y-0'
             : cn('translate-x-[calc(100%+24px)]', (mobileSheet || mobileFull) && 'max-lg:translate-x-0 max-lg:translate-y-full')
         )}

@@ -45,7 +45,7 @@ function DetailContent() {
     <div className="min-h-screen bg-page text-content">
       <main className="pb-24">
         {!valid ? <div className="pt-28 px-6"><button onClick={back} className="btn-ghost btn-sm mb-6"><Icon name="chevronLeft" className="w-4 h-4" /> 返回</button><EmptyState icon="alert" title="详情链接不完整" description="请返回首页重新选择影片" /></div> : isSource ? (
-          <SourceDetail id={id} title={title} cover={cover} sourceKey={sourceKey} sourceUrl={sourceUrl} sourceName={sourceName} onBack={back} />
+          <UnifiedSourceDetail id={id} title={title} cover={cover} sourceKey={sourceKey} sourceUrl={sourceUrl} sourceName={sourceName} onBack={back} />
         ) : (
           <RecommendationDetail item={{ id, title, cover, rating: params.get('rating') || undefined, isTv: params.get('tv') === '1' }} onBack={back} />
         )}
@@ -353,6 +353,22 @@ function EpisodeRow({ count, title, cover, sourceName, names, urls, onPlay, reve
       </button>)}
     </div>
   </section>;
+}
+
+function UnifiedSourceDetail(props: Parameters<typeof SourceDetail>[0]) {
+  const match = useQuery({
+    queryKey: ['detail-subject-match', props.title],
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/douban/resolve?${new URLSearchParams({ title: props.title })}`, { signal });
+      if (!response.ok) return null;
+      const result = await response.json() as { item: DoubanItem | null };
+      return result.item;
+    },
+    staleTime: 24 * 60 * 60_000, retry: false,
+  });
+  if (match.isLoading) return <article><DetailHero onBack={props.onBack}><h1 className="hero-title text-4xl sm:text-5xl font-black">{props.title}</h1><DetailLoadingLines /></DetailHero></article>;
+  if (match.data) return <RecommendationDetail key={match.data.id} item={match.data} onBack={props.onBack} />;
+  return <SourceDetail {...props} />;
 }
 
 function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBack }: { id: string; title: string; cover: string; sourceKey: string; sourceUrl: string; sourceName: string; onBack: () => void }) {
