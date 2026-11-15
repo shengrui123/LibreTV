@@ -10,7 +10,7 @@ import { buildRecommendationDetailUrl, buildSourceDetailUrl } from '@/lib/detail
 import { useAbstract } from '@/components/home-hero';
 import { useTmdbHero } from '@/components/use-tmdb-hero';
 import { Icon } from '@/components/icon';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { EmptyState, ErrorState } from '@/components/states';
 import { useAuth } from '@/components/auth';
 import { useAppStore, resolveSource, isSourceDisabled, isInDisabledSubscription } from '@/lib/store';
 import { api } from '@/lib/client-api';
@@ -192,6 +192,14 @@ function useVideoFrames(title: string, episodeUrl?: string, enabled = true) {
   return frames;
 }
 
+function DetailLoadingLines() {
+  return <div role="status" aria-label="正在加载影片资料" className="mt-5 w-full max-w-md space-y-2 motion-safe:animate-pulse"><div className="h-3 rounded-sm bg-white/15" /><div className="h-3 rounded-sm bg-white/15" /><div className="h-3 w-4/5 rounded-sm bg-white/15" /><div className="flex gap-3 pt-3"><div className="h-2 w-20 rounded bg-white/15" /><div className="h-2 w-16 rounded bg-white/15" /><div className="h-2 w-20 rounded bg-white/15" /></div></div>;
+}
+
+function EpisodeLoadingCards() {
+  return <section aria-label="正在加载剧集" className="px-4 sm:px-8 lg:px-12"><div className="h-6 w-16 rounded bg-content/15 motion-safe:animate-pulse" /><div className="flex gap-3 overflow-hidden mt-5 motion-safe:animate-pulse">{[0, 1, 2].map((i) => <div key={i} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] aspect-video rounded-2xl bg-content/10" />)}</div></section>;
+}
+
 function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () => void }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -248,7 +256,7 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
               <img src={tmdb.data.logo} alt={item.title} className="max-w-full max-h-24 sm:max-h-32 object-contain object-left" onError={() => setLogoFailed(true)} />
             </h1>
           ) : <h1 className="hero-title text-4xl sm:text-5xl lg:text-[56px] font-black leading-tight">{item.title}</h1>}
-          <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>
+          {abs.isLoading && !a ? <DetailLoadingLines /> : <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>}
           {a?.intro && <button type="button" onClick={() => setIntroOpen(true)} className="mt-4 block text-left text-sm sm:text-base leading-relaxed text-white/75 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white rounded"><span className="line-clamp-3">{a.intro}</span></button>}
           {(rating || tmdb.data?.score || tmdbSeries.data?.score) && <p className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-semibold text-white">{rating && <span className="inline-flex items-center gap-1.5" aria-label={`豆瓣评分 ${rating}`}><Cover url="https://www.douban.com/favicon.ico" alt="" className="w-5 h-5 rounded-sm" />{rating}</span>}{(tmdbSeries.data?.score || tmdb.data?.score) && <span>TMDB {tmdbSeries.data?.score || tmdb.data?.score}</span>}<span className="text-white/65" title="暂无可靠的烂番茄评分">烂番茄 —</span></p>}
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
@@ -262,9 +270,8 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
         </div>
       </DetailHero>
       <div className="space-y-10 pt-8 sm:pt-10">
-        {(item.isTv || !!a?.episodes) && <TmdbSeriesPanel key={item.title} title={item.title} year={a?.year}><RecommendedEpisodes title={item.title} cover={item.cover} count={a?.episodes} onPlay={(index, name) => { void playNow(index, name); }} /></TmdbSeriesPanel>}
+        {item.isTv && abs.isLoading && !a ? <EpisodeLoadingCards /> : (item.isTv || !!a?.episodes) && <TmdbSeriesPanel key={item.title} title={item.title} year={a?.year}><RecommendedEpisodes title={item.title} cover={item.cover} count={a?.episodes} onPlay={(index, name) => { void playNow(index, name); }} /></TmdbSeriesPanel>}
         <section aria-label="预告片"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">预告片</h2>{extras.isLoading ? <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">正在获取预告片…</p> : extras.data?.trailers?.length ? <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{extras.data.trailers.map((trailer) => <button key={trailer.id} type="button" onClick={() => setTrailer({ id: trailer.id, title: trailer.title })} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] text-left snap-start group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"><div className="relative aspect-video overflow-hidden rounded-2xl bg-chip"><Cover url={trailer.cover} alt="" className="w-full h-full object-cover" /><span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><span className="absolute inset-0 flex items-center justify-center"><span className="glass glass-clear glass-dark rounded-full p-3"><Icon name="play" className="w-5 h-5" /></span></span>{trailer.runtime && <span className="absolute right-3 bottom-3 text-xs text-white">{trailer.runtime}</span>}</div><span className="block mt-2 text-sm font-medium text-content line-clamp-2">{trailer.title}</span></button>)}</div> : <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">暂无预告片</p>}</section>
-        {abs.isLoading && <div className="px-4 sm:px-8 lg:px-12"><LoadingState label="正在获取影片信息..." /></div>}
         {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
         {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
         {!!extras.data?.items.length && <Row title="相关推荐">{extras.data.items.map((recommendation) => <PosterCard key={recommendation.id} item={recommendation} className={POSTER_W} showTitle onOpen={(picked) => router.push(buildRecommendationDetailUrl(picked, window.location.pathname + window.location.search))} />)}</Row>}
@@ -407,16 +414,17 @@ function SourceDetail({ id, title, cover, sourceKey, sourceUrl, sourceName, onBa
       <DetailHero image={cover || info?.cover} fallback={!frames.length} onBack={onBack} stills={frames} stillIndex={frameIndex} onSelectStill={setFrameIndex}>
         <div className="max-w-[660px]">
           <h1 className="hero-title text-4xl sm:text-5xl lg:text-[56px] font-black leading-tight break-words">{title}</h1>
-          <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>
+          {(!hydrated || query.isLoading) && !detail ? <DetailLoadingLines /> : <p className="mt-3 text-sm sm:text-base text-white/85">{meta}</p>}
           <p className="mt-2 text-sm text-white/70">{source?.name || sourceName}</p>
           {description && <button type="button" className="mt-4 block text-left text-sm sm:text-base text-white/75 leading-relaxed" onClick={() => setIntroOpen(true)}><span className="line-clamp-3">{description}</span></button>}
           <div className="mt-6 flex items-center gap-2.5">{episodes.length > 0 && <button className="btn bg-white text-black px-6 py-2.5 text-[15px] font-semibold hover:bg-white/90" onClick={() => play(0)}><Icon name="play" className="w-4 h-4" /> 立即播放</button>}<ShareButton title={title} /></div>
         </div>
       </DetailHero>
+      {(!hydrated || query.isLoading) && !detail && <div className="pt-8"><EpisodeLoadingCards /></div>}
       {!!seasons.data?.length && <section className="px-4 sm:px-8 lg:px-12 pt-8"><h2 className="text-lg font-semibold mb-3">全部季</h2><div className="flex gap-2 overflow-x-auto no-scrollbar">{!seasons.data.some((entry) => normalizeTitle(entry.name) === normalizeTitle(title)) && <button type="button" aria-current="true" className="btn-hero shrink-0">{title.slice(seasonBase.length).trim() || '当前季'}</button>}{seasons.data.map((entry) => <button key={entry.name} type="button" aria-pressed={entry.name === title} className={entry.name === title ? 'btn-hero shrink-0' : 'btn-ghost shrink-0'} onClick={() => router.push(buildSourceDetailUrl(entry, params.get('returnTo') || '/'))}>{entry.name.slice(seasonBase.length).trim()}</button>)}</div></section>}
       {episodes.length > 1 && <div className="pt-8 sm:pt-10"><TmdbSeriesPanel key={title} title={title} year={info?.year}><EpisodeRow count={episodes.length} title={title} cover={cover || info?.cover} sourceName={source?.name || sourceName} names={detail?.episodeNames} urls={episodes} onPlay={(index) => { void play(index); }} reversed={reversed} onReverse={() => setReversed(!reversed)} onCopy={() => { void copyToClipboard(episodes.join('\n')).then((ok) => toast(ok ? '播放链接已复制' : '复制失败，请检查浏览器权限')); }} /></TmdbSeriesPanel></div>}
       <div className="px-4 sm:px-8 lg:px-12 pt-8 sm:pt-10 max-w-[1680px] mx-auto">
-        {!hydrated || (!!source && query.isLoading) ? <LoadingState label="正在获取剧集信息..." /> : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length > 1 ? null : detail && episodes.length ? <section>
+        {!hydrated || (!!source && query.isLoading) ? null : !source ? <ErrorState message="点播源配置不存在，请在设置中重新添加" /> : query.isError ? <ErrorState message={query.error instanceof Error ? query.error.message : '获取详情失败'} /> : detail && episodes.length > 1 ? null : detail && episodes.length ? <section>
           <div className="flex flex-wrap justify-between items-center gap-3 mb-4"><h2 className="text-xl sm:text-2xl font-bold">剧集 · {episodes.length} 集</h2><div className="flex gap-2"><button className="btn-ghost btn-sm" onClick={() => setReversed(!reversed)}>{reversed ? '正序排列' : '倒序排列'}</button><button className="btn-ghost btn-sm" onClick={async () => toast(await copyToClipboard(episodes.join('\n')) ? '播放链接已复制' : '复制失败，请检查浏览器权限')}>复制链接</button></div></div>
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">{episodes.map((_, i) => reversed ? episodes.length - 1 - i : i).map((index) => <button key={index} className="btn-ghost btn-sm" onClick={() => play(index)}>{index + 1}</button>)}</div>
         </section> : detail ? <EmptyState icon="alert" title="未找到播放资源" description="请尝试其他视频" /> : null}
