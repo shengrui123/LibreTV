@@ -1,5 +1,7 @@
 'use client';
 
+import { EmbySource } from './emby-source';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/client-api';
@@ -308,6 +310,7 @@ export function SwitchSourceModal({
 
         {/* 内容区独占剩余高度并自己滚动：标题与拖拽条始终可见，不随内容滚走 */}
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin">
+        <EmbySource title={currentTitle} index={currentIndex} onClose={onClose} />
         {phase !== 'done' ? (
           <LoadingState label={phase === 'searching' ? '搜索各资源中...' : '测速中...'} />
         ) : sorted.length === 0 ? (

@@ -238,6 +238,7 @@ export function PlayerShell({
   // 当前集预取（episodeKey 缺省 = 关闭，见 ensure 内部 settings.enabled 判断）
   const ensurePrefetch = (mediaUrl: string, currentTime: number, horizonSeconds?: number) => {
     const p = propsRef.current;
+    if (mediaUrl.startsWith('/api/emby?')) return;
     if (!p.episodeKey) return;
     getVideoPrefetcher().ensure({
       m3u8Url: mediaUrl,
@@ -407,6 +408,15 @@ export function PlayerShell({
       restoreEvents.forEach((event) => video.removeEventListener(event, onRestoreEvent));
     };
 
+    if (mediaUrl.startsWith('/api/emby?stream=')) {
+      hls.destroy(); hlsRef.current = null;
+      video.removeAttribute('crossorigin');
+      video.src = mediaUrl;
+      video.load();
+      video.play().catch(() => {});
+      return;
+    }
+    video.crossOrigin = 'anonymous';
     hls.loadSource(mediaUrl);
     hls.attachMedia(video);
 

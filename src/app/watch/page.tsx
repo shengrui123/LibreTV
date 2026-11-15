@@ -187,7 +187,7 @@ function WatchContent() {
     };
   }, [skipPanelOpen]);
 
-  const source = resolveSource(store, sourceKey, {
+  const source = sourceKey === 'emby' ? { key: 'emby', name: 'Emby', url: 'https://emby.invalid' } : resolveSource(store, sourceKey, {
     url: searchParams.get('sourceUrl') || undefined,
     detail: searchParams.get('detail') || undefined,
   });

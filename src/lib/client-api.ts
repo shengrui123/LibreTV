@@ -142,6 +142,7 @@ export const api = {
   },
 
   detail: (id: string, source: SourceConfig, signal?: AbortSignal) => {
+    if (source.key === 'emby') return request<VideoDetail>(`/api/emby?${new URLSearchParams({ id })}`, { signal });
     const sp = new URLSearchParams({ id, source: JSON.stringify(source) });
     return request<VideoDetail>(`/api/detail?${sp.toString()}`, { signal });
   },
