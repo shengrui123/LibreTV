@@ -107,6 +107,7 @@ interface PlayerShellProps {
   /** 控制条上的上一集 / 下一集：不在播放器里也能切集，省得回到页面按钮 */
   onPrevEpisode?: () => void;
   onNextEpisode?: () => void;
+  onOpenEpisodes?: (container: HTMLElement) => void;
   hasPrevEpisode?: boolean;
   hasNextEpisode?: boolean;
 }
@@ -135,6 +136,7 @@ export function PlayerShell({
   onRequestSwitchSource,
   onPrevEpisode,
   onNextEpisode,
+  onOpenEpisodes,
   hasPrevEpisode,
   hasNextEpisode,
 }: PlayerShellProps) {
@@ -155,14 +157,14 @@ export function PlayerShell({
     pendingStart, onPendingStart, onPlayerApi, onRecordSegment,
     episodeKey, nextUrl, nextEpisodeKey,
     getRestorePosition, onTimeUpdate, onEnded, onPause, onQuality, onRequestSwitchSource,
-    onPrevEpisode, onNextEpisode, hasPrevEpisode, hasNextEpisode,
+    onPrevEpisode, onNextEpisode, onOpenEpisodes, hasPrevEpisode, hasNextEpisode,
   });
   propsRef.current = {
     url, title, adFilter, autoplayNext, skipMark, autoSkipSegments, volumeBoost, miniProgressBar,
     pendingStart, onPendingStart, onPlayerApi, onRecordSegment,
     episodeKey, nextUrl, nextEpisodeKey,
     getRestorePosition, onTimeUpdate, onEnded, onPause, onQuality, onRequestSwitchSource,
-    onPrevEpisode, onNextEpisode, hasPrevEpisode, hasNextEpisode,
+    onPrevEpisode, onNextEpisode, onOpenEpisodes, hasPrevEpisode, hasNextEpisode,
   };
 
   /** 上报实测画质：多次上报取大值由调用方决定，这里只管把拿到的高度传出去 */
@@ -555,6 +557,12 @@ export function PlayerShell({
       moreVideoAttr: { crossOrigin: 'anonymous', playsInline: true },
       // 上/下集放在播放键右侧：换集是看剧最高频的动作，不该让用户滚回页面下方找按钮
       controls: [
+        {
+          name: 'episode-list', index: 19, position: 'right',
+          html: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h2m3 0h5M7 12h2m3 0h5M7 16h2m3 0h5"/></svg>',
+          tooltip: '选集',
+          click: () => { const player = artRef.current?.template?.$player; if (player) propsRef.current.onOpenEpisodes?.(player); },
+        },
         {
           name: 'prev-episode',
           index: 11,

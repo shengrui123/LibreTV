@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 // 播放器（artplayer + hls.js）按需加载：拆出独立 chunk，不占首屏 First Load JS
@@ -132,6 +133,13 @@ function WatchContent() {
   const indexParam = parseInt(searchParams.get('index') || '0', 10) || 0;
 
   const [reversed, setReversed] = useState(false);
+  const [episodeHost, setEpisodeHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!episodeHost) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setEpisodeHost(null); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [episodeHost]);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -409,6 +417,7 @@ function WatchContent() {
                   miniProgressBar={store.miniProgressBar}
                   pendingStart={pendingStart}
                   onPendingStart={setPendingStart}
+                  onOpenEpisodes={setEpisodeHost}
                   onPlayerApi={(api) => { playerApiRef.current = api; }}
                   onRecordSegment={handleRecordSegment}
                   episodeKey={`${sourceKey}:${vodId}:${currentIndex}`}
@@ -442,9 +451,7 @@ function WatchContent() {
                 </div>
               )}
               {currentUrl && <div className={cn('absolute inset-0 z-10 flex items-center justify-center gap-6 sm:gap-12 pointer-events-none transition-opacity', controlsVisible || !videoPlaying ? 'opacity-100' : 'opacity-0')} aria-hidden={videoPlaying && !controlsVisible} inert={videoPlaying && !controlsVisible}>
-                <button type="button" aria-label="快退 10 秒" className="pointer-events-auto glass glass-clear glass-dark rounded-full w-14 h-14 sm:w-16 sm:h-16 text-white text-sm font-bold" onClick={() => { const video = playerFrameRef.current?.querySelector('video'); if (video) video.currentTime = Math.max(0, video.currentTime - 10); }}>↶ 10</button>
                 <button type="button" aria-label={videoPlaying ? '暂停' : '播放'} className="pointer-events-auto glass glass-clear glass-dark rounded-full w-20 h-20 sm:w-24 sm:h-24 grid place-items-center text-white" onClick={() => { const video = playerFrameRef.current?.querySelector('video'); if (video) { if (video.paused) void video.play().catch(() => {}); else video.pause(); } }}>{videoPlaying ? <span className="flex gap-2"><span className="w-2.5 h-8 rounded-sm bg-white" /><span className="w-2.5 h-8 rounded-sm bg-white" /></span> : <Icon name="play" className="w-9 h-9" />}</button>
-                <button type="button" aria-label="快进 10 秒" className="pointer-events-auto glass glass-clear glass-dark rounded-full w-14 h-14 sm:w-16 sm:h-16 text-white text-sm font-bold" onClick={() => { const video = playerFrameRef.current?.querySelector('video'); if (video) video.currentTime = Math.min(Number.isFinite(video.duration) ? video.duration : video.currentTime + 10, video.currentTime + 10); }}>10 ↷</button>
               </div>}
               {currentUrl && <div className={cn('absolute left-5 sm:left-8 bottom-20 z-10 pointer-events-none text-white drop-shadow-lg transition-opacity', controlsVisible || !videoPlaying ? 'opacity-100' : 'opacity-0')} aria-hidden="true"><p className="text-xs sm:text-sm text-white/75">{episodes.length > 1 ? `第 ${currentIndex + 1} 集` : source.name}</p><p className="mt-1 text-xl sm:text-3xl font-bold">{videoTitle}</p></div>}
             </div>
@@ -515,8 +522,11 @@ function WatchContent() {
             />
           </div>
 
-          {/* 剧集侧栏 */}
-          <aside className="glass glass-thick rounded-[22px] p-5 h-fit mx-4 sm:mx-6 [--glass-tint:30_28_26] [--glass-alpha:.65] [--glass-sheen:.06]">
+
+        </div>
+      </main>
+
+      {episodeHost && createPortal(<div className="absolute inset-0 z-[100] bg-black/30" role="dialog" aria-modal="true" aria-label="选集" onClick={() => setEpisodeHost(null)}><aside className="glass glass-thick rounded-[22px] p-5 h-fit mx-4 sm:mx-6 [--glass-tint:30_28_26] [--glass-alpha:.65] [--glass-sheen:.06]">
             <div className="flex items-center justify-between gap-2 mb-2.5">
               <h2 className="text-sm font-semibold text-content">
                 剧集列表{episodes.length > 0 && `（${episodes.length}）`}
@@ -537,6 +547,7 @@ function WatchContent() {
                 </button>
               )}
             </div>
+            <button autoFocus type="button" className="btn-ghost btn-sm mb-3" onClick={() => setEpisodeHost(null)}>关闭选集</button>
             {episodes.length === 0 ? (
               detailQuery.isLoading ? (
                 <LoadingState />
@@ -550,7 +561,7 @@ function WatchContent() {
                     key={realIndex}
                     index={realIndex}
                     active={realIndex === currentIndex}
-                    onClick={() => goEpisode(realIndex)}
+                    onClick={() => { goEpisode(realIndex); setEpisodeHost(null); }}
                   />
                 ))}
               </div>
@@ -558,9 +569,7 @@ function WatchContent() {
             <p className="hidden md:block text-[10px] text-faint mt-3 leading-relaxed">
               快捷键：空格 播放/暂停 · ←/→ 快退/快进 5s · ↑/↓ 音量 · F 全屏 · Alt+←/→ 切换集数
             </p>
-          </aside>
-        </div>
-      </main>
+          </aside></div>, episodeHost)}
 
       {switchOpen && (
         <SwitchSourceModal
