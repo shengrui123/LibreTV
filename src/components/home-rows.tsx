@@ -475,18 +475,21 @@ export function CategoryRow({ title, categories }: { title: string; categories: 
 }
 
 function CategoryTile({ c, visible }: { c: Category; visible: boolean }) {
-  const list = useDoubanList(c.type, c.tag, visible);
+  const list = useDoubanList(c.type, c.tag, visible && c.type !== 'movie');
   const first = list.data?.[0];
   // 只读缓存里已有的剧照（Hero / 预览拉过的），不为磁贴单独请求，避免触发豆瓣限流
   const cached = useQueryClient().getQueryData<DoubanAbstract>(['douban-abstract', first?.id ?? '']);
   const still = cached?.stills?.[0];
+  const movieIndex = c.type === 'movie' ? MOVIE_CATEGORIES.findIndex((category) => category.tag === c.tag) : -1;
   return (
     <Link
       href={`/?browse=${c.type}&tag=${encodeURIComponent(c.tag)}`}
       className="group/card shrink-0 snap-start w-[46%] sm:w-[30%] md:w-[23%] lg:w-[19%] xl:w-[16%] 2xl:w-[14%] focus-visible:outline-none"
     >
       <div className="poster-lift relative aspect-[16/10] rounded-[14px] overflow-hidden bg-chip group-focus-visible/card:ring-[3px] group-focus-visible/card:ring-content">
-        {still ? (
+        {movieIndex >= 0 ? (
+          <div aria-hidden className="absolute inset-0 overflow-hidden transition-transform duration-500 group-hover/card:scale-105"><div className="absolute left-0 top-1/2 w-full aspect-square -translate-y-1/2" style={{ backgroundImage: "url('/images/movie-category-art.png')", backgroundSize: '400% 200%', backgroundPosition: `${(movieIndex % 4) * 100 / 3}% ${Math.floor(movieIndex / 4) * 100}%` }} /></div>
+        ) : still ? (
           <Cover url={still} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : first ? (
           <Cover url={first.cover} alt="" large className="absolute inset-0 w-full h-full object-cover object-[center_30%]" />
