@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Cover, Row, PosterCard, POSTER_W } from '@/components/home-rows';
-import { TmdbSeriesPanel } from '@/components/tmdb-series-panel';
+import { TmdbSeriesPanel, useTmdbSeriesMetadata } from '@/components/tmdb-series-panel';
 import { CastPortrait } from '@/components/cast-portrait';
 import { buildRecommendationDetailUrl, buildSourceDetailUrl } from '@/lib/detail-url';
 import { useAbstract } from '@/components/home-hero';
@@ -227,8 +227,9 @@ function RecommendationDetail({ item, onBack }: { item: DoubanItem; onBack: () =
   useEffect(() => setStillIndex(0), [item.id]);
   const a = abs.data;
   const stills = a?.stills ?? [];
-  const frames = useVideoFrames(item.title);
-  const heroImages = [...frames, ...stills];
+  const tmdbSeries = useTmdbSeriesMetadata(item.title, a?.year, undefined, !!a?.year && (!!item.isTv || !!a?.episodes));
+  const tmdbImages = [...(tmdbSeries.data?.images ?? []), ...(tmdbSeries.data?.episodes.flatMap((episode) => episode.image ? [episode.image] : []) ?? [])];
+  const heroImages = tmdbImages.length ? [...new Set(tmdbImages)] : stills;
   const heroIndex = stillIndex % Math.max(heroImages.length, 1);
   useEffect(() => {
     if (heroImages.length < 2) return;
