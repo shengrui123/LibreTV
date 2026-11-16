@@ -407,3 +407,14 @@ body {
   to { transform: scaleX(1); }
 }
 .hero-progress { animation: hero-progress-fill linear both; }
+
+/* Error actions remain visible above ArtPlayer and native video overlays, including fullscreen. */
+.art-video-player.has-playback-error .art-video {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.art-video-player.has-playback-error .art-mask,
+.art-video-player.has-playback-error .art-loading,
+.art-video-player.has-playback-error .art-state {
+  display: none !important;
+}

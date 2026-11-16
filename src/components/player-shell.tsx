@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Artplayer from 'artplayer';
+import { createPortal } from 'react-dom';
 import Hls, { type HlsConfig } from 'hls.js';
 
 import { PlaybackRecovery, describeHlsError } from '@/lib/playback-recovery';
@@ -1101,6 +1102,14 @@ export function PlayerShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adFilter]);
 
+  useEffect(() => {
+    const art = artRef.current;
+    const player = art?.template?.$player;
+    player?.classList.toggle('has-playback-error', !!error);
+    if (error && art) { art.pause(); art.video.controls = false; }
+    return () => { player?.classList.remove('has-playback-error'); };
+  }, [error]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" style={{ WebkitTouchCallout: 'none' }} />
@@ -1140,14 +1149,17 @@ export function PlayerShell({
               : '跳过中段'}
         </button>
       )}
-      {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80">
-          <p className="text-danger text-sm">{error}</p>
-          {embyDiagnostic && <button type="button" className="btn-ghost btn-sm mt-3" onClick={() => { void copyToClipboard(embyDiagnostic).then((ok) => showHint(ok ? '诊断信息已复制' : '复制失败')); }}>复制诊断信息</button>}
-          <button className="btn-ghost text-xs" onClick={() => location.reload()}>
+      {error && createPortal(
+        <div role="alert" className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-3 overflow-y-auto bg-black/95 px-5 py-8 text-center" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+
+          <p className="max-w-xl text-danger text-sm leading-relaxed">{error}</p>
+          {embyDiagnostic && <button type="button" className="btn-primary min-h-11 mt-2" onClick={() => { void copyToClipboard(embyDiagnostic).then((ok) => showHint(ok ? '诊断信息已复制' : '复制失败')); }}>复制诊断信息</button>}
+          {embyDiagnostic && <details className="w-full max-w-xl text-left text-white/75 text-xs"><summary className="cursor-pointer py-2 text-center">查看诊断信息（也可手动复制）</summary><textarea aria-label="诊断信息" readOnly value={embyDiagnostic} onFocus={(event) => event.currentTarget.select()} className="mt-2 h-32 w-full rounded-xl border border-white/20 bg-white/5 p-3 text-xs text-white select-text" /></details>}
+          <button className="btn-ghost text-xs min-h-11" onClick={() => location.reload()}>
             重新加载
           </button>
-        </div>
+        </div>,
+        artRef.current?.template?.$player ?? containerRef.current ?? document.body
       )}
       {(hint || undoSkip) && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-sm text-white animate-fade-in">
