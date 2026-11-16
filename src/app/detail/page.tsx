@@ -261,11 +261,17 @@ function RecommendationDetail({ item, onBack, playbackSource }: { item: DoubanIt
   const [stillIndex, setStillIndex] = useState(0);
   useEffect(() => setStillIndex(0), [item.id]);
   const a = abs.data ?? sourceAbstract;
-  const stills = a?.stills ?? [];
   const tmdbSeries = useTmdbSeriesMetadata(item.title, a?.year, undefined, !!a?.year && (!!item.isTv || !!a?.episodes));
-  const tmdbImages = [...(tmdbSeries.data?.images ?? []), ...(tmdbSeries.data?.episodes.flatMap((episode) => episode.image ? [episode.image] : []) ?? [])];
-  const frames = useVideoFrames(item.title, undefined, !playbackSource || !!sourceDetail);
-  const heroImages = useCleanBackdrops([...frames, ...tmdbImages, ...stills]);
+  const nativeTmdb = useQuery({
+    queryKey: ['tmdb-detail-backdrops-v2', item.id],
+    enabled: /^tmdb-(movie|tv)-\d+$/.test(item.id),
+    queryFn: async ({ signal }): Promise<string[]> => {
+      const response = await fetch(`/api/tmdb-trending?id=${encodeURIComponent(item.id)}`, { signal });
+      if (!response.ok) throw new Error('获取 TMDB 剧照失败');
+      return (await response.json()).entries[0]?.abstract.stills ?? [];
+    }, staleTime: 30 * 60_000, retry: false,
+  });
+  const heroImages = useCleanBackdrops(item.id.startsWith('tmdb-') ? nativeTmdb.data ?? [] : [...(tmdb.data?.backdrops ?? []), ...(tmdbSeries.data?.images ?? [])]);
   const heroIndex = stillIndex % Math.max(heroImages.length, 1);
   useEffect(() => {
     if (heroImages.length < 2) return;

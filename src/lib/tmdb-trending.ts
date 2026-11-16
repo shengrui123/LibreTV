@@ -1,12 +1,13 @@
+import { cleanTmdbBackdrops } from './tmdb-backdrops';
 import { fetchUpstream, getCache, setCache } from './fetch-utils';
 import type { DoubanAbstract, DoubanItem } from './types';
 export interface TrendingEntry { item: DoubanItem; abstract: DoubanAbstract }
 const image = (path?: string, size = 'original') => path && /^\/[\w-]+\.(jpg|png|webp)$/.test(path) ? `https://image.tmdb.org/t/p/${size}${path}` : '';
-async function get(path: string) {
+async function get(path: string, extra: Record<string, string> = {}) {
   const token = process.env.TMDB_READ_ACCESS_TOKEN;
   const key = process.env.TMDB_API_KEY;
   if (!token && !key) throw new Error('尚未配置 TMDB API');
-  const query = new URLSearchParams({ language: 'zh-CN' }); if (key) query.set('api_key', key);
+  const query = new URLSearchParams({ language: 'zh-CN', ...extra }); if (key) query.set('api_key', key);
   const response = await fetchUpstream(`https://api.themoviedb.org/3/${path}?${query}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, timeoutMs: 8000, redirect: 'error', safeRedirects: false });
   if (!response.ok) throw new Error('TMDB 暂时无法访问');
   return response.json();
@@ -19,12 +20,15 @@ export function trendingEntry(media: Media, type = media.media_type): TrendingEn
 }
 export async function fetchTrending(id?: string): Promise<TrendingEntry[]> {
   if (id && !/^tmdb-(movie|tv)-\d{1,12}$/.test(id)) throw new Error('无效的 TMDB 条目');
-  const key = `tmdb-trending:${id || 'day'}`;
+  const key = `tmdb-trending-v2:${id || 'day'}`;
   const cached = getCache<TrendingEntry[]>(key); if (cached) return cached;
   let entries: TrendingEntry[];
   if (id) {
     const [, type, number] = id.split('-');
-    const entry = trendingEntry(await get(`${type}/${number}`), type); entries = entry ? [entry] : [];
+    const media = await get(`${type}/${number}`, { append_to_response: 'images', include_image_language: 'null' });
+    const entry = trendingEntry(media, type);
+    if (entry) entry.abstract.stills = cleanTmdbBackdrops(media.images?.backdrops);
+    entries = entry ? [entry] : [];
   } else {
     const data = await get('trending/all/day');
     entries = (data.results as Media[] || []).map((entry) => trendingEntry(entry)).filter((entry): entry is TrendingEntry => !!entry && !!entry.abstract.stills?.length).slice(0, 8);

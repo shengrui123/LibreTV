@@ -1,3 +1,4 @@
+import { cleanTmdbBackdrops } from './tmdb-backdrops';
 import { fetchUpstream, getCache, setCache } from './fetch-utils';
 
 export interface SeriesMetadata {
@@ -24,7 +25,7 @@ export async function fetchSeriesMetadata(title: string, year: string, selected?
   if (!token && !apiKey) return null;
   const parsed = splitSeason(title);
   const season = selected ?? parsed.season;
-  const key = `tmdb-series-v4:${title}:${year}:${season}`;
+  const key = `tmdb-series-v5:${title}:${year}:${season}`;
   const cached = getCache<SeriesMetadata>(key);
   if (cached) return cached;
   const get = async (path: string) => {
@@ -43,7 +44,7 @@ export async function fetchSeriesMetadata(title: string, year: string, selected?
   const result: SeriesMetadata = {
     id, baseTitle: parsed.base, season,
     score: typeof show.vote_average === 'number' && show.vote_average > 0 && show.vote_average <= 10 && show.vote_count > 0 ? show.vote_average.toFixed(1) : undefined,
-    images: (show.images?.backdrops ?? []).filter((x: { file_path?: string; width?: number; iso_639_1?: string | null }) => x.iso_639_1 == null && typeof x.file_path === 'string' && /^\/[\w-]+\.(jpg|png|webp)$/.test(x.file_path) && (x.width ?? 0) >= 1280).slice(0, 10).map((x: { file_path: string }) => `https://image.tmdb.org/t/p/original${x.file_path}`),
+    images: cleanTmdbBackdrops(show.images?.backdrops),
     seasons: (show.seasons ?? []).filter((x: { season_number: number }) => x.season_number > 0).map((x: { season_number: number; name: string; episode_count: number }) => ({ number: x.season_number, name: x.name, count: x.episode_count })),
     episodes: (data.episodes ?? []).map((x: { episode_number: number; name: string; overview?: string; still_path?: string; air_date?: string; runtime?: number; vote_average?: number }) => ({ number: x.episode_number, name: x.name, overview: x.overview || undefined, image: x.still_path && /^\/[\w-]+\.(jpg|png|webp)$/.test(x.still_path) ? `https://image.tmdb.org/t/p/w1280${x.still_path}` : undefined, date: x.air_date || undefined, runtime: x.runtime && x.runtime > 0 ? x.runtime : undefined, rating: x.vote_average && x.vote_average > 0 ? x.vote_average : undefined })),
   };

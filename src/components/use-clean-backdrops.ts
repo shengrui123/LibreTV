@@ -27,7 +27,8 @@ export function useCleanBackdrops(candidates: string[]) {
             await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
           }
           try {
-            const response = await fetch(url.startsWith('data:') ? url : `/api/proxy?url=${encodeURIComponent(url)}`);
+            const inspectionUrl = url.startsWith('https://image.tmdb.org/t/p/original/') ? url.replace('/original/', '/w1280/') : url;
+            const response = await fetch(inspectionUrl.startsWith('data:') ? inspectionUrl : `/api/proxy?url=${encodeURIComponent(inspectionUrl)}`);
             if (!response.ok) continue;
             const { data } = await worker.recognize(await response.blob(), {}, { blocks: true });
             if (cancelled) break;
