@@ -10,7 +10,7 @@ const cookie = () => `${EMBY_COOKIE}=${sealEmby({ base: 'https://emby.example', 
 describe('playback-only Emby integration', () => {
   it('returns connection status without browsing the media library', async () => {
     const response = await GET(new NextRequest('https://local/api/emby', { headers: { cookie: cookie() } }));
-    expect(await response.json()).toEqual({ connected: true, name: 'User' });
+    expect(await response.json()).toMatchObject({ connected: true, name: 'User' });
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it('requires an Emby login before querying', async () => {
@@ -22,10 +22,18 @@ describe('playback-only Emby integration', () => {
     const response = await GET(new NextRequest('https://local/api/emby?title=Example', { headers: { cookie: cookie() } }));
     expect(await response.json()).toEqual({ items: [{ id: '1', name: 'Example', type: '电影' }] });
   });
+  it('keeps custom library names and notes in the encrypted connection', async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ AccessToken: 'secret', User: { Id: 'u1', Name: 'User' } }));
+    const response = await POST(new NextRequest('https://local/api/emby', { method: 'POST', body: JSON.stringify({ url: 'http://emby.example:8096/emby', username: 'User', password: '', libraryName: '家庭资源库', notes: '账号备注' }) }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ name: '家庭资源库' });
+    const status = await GET(new NextRequest('https://local/api/emby', { headers: { cookie: `${EMBY_COOKIE}=${response.cookies.get(EMBY_COOKIE)!.value}` } }));
+    expect(await status.json()).toMatchObject({ connected: true, name: '家庭资源库', url: 'http://emby.example:8096/emby', notes: '账号备注' });
+  });
   it('stores a login token in an HttpOnly cookie without returning it or storing the password', async () => {
     mocks.fetch.mockResolvedValue(Response.json({ AccessToken: 'secret', User: { Id: 'u1', Name: 'User' } }));
     const response = await POST(new NextRequest('https://local/api/emby', { method: 'POST', body: JSON.stringify({ url: 'https://emby.example', username: 'User', password: 'password' }) }));
-    expect(await response.json()).toEqual({ connected: true, name: 'User' });
+    expect(await response.json()).toMatchObject({ connected: true, name: 'User' });
     expect(response.headers.get('set-cookie')).toContain('HttpOnly');
     expect(response.headers.get('set-cookie')).not.toContain('secret');
   });

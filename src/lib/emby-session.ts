@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 export const EMBY_COOKIE = 'ltv_emby';
-export interface EmbySession { base: string; token: string; user: string; name: string; expires: number }
+export interface EmbySession { base: string; token: string; user: string; name: string; notes?: string; expires: number }
 const key = () => createHash('sha256').update((process.env.PROXY_SECRET || process.env.PASSWORD || '') + ':emby-session-v1').digest();
 export function sealEmby(session: EmbySession) {
   const iv = randomBytes(12);
