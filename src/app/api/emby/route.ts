@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { guardRequest } from '@/lib/api-guard';
 import { fetchWithSafeRedirects, fetchUpstream } from '@/lib/fetch-utils';
 import { EMBY_COOKIE, openEmby, sealEmby, type EmbySession } from '@/lib/emby-session';
-import { embyMediaUrl, selectEmbyPlayback, embyPlaybackProfile, EMBY_DEVICE_ID } from '@/lib/emby-playback';
+import { embyMediaUrl, selectEmbyPlayback, browserEmbyProfile, playbackDiagnostics, EMBY_DEVICE_ID } from '@/lib/emby-playback';
 import { splitSeason } from '@/lib/tmdb-series';
 export const runtime = 'nodejs';
 const authorization = 'Emby Client="LibreTV", Device="Web", DeviceId="libretv-web", Version="1.0"';
@@ -78,9 +78,12 @@ export async function GET(req: NextRequest) {
     const stream = params.get('stream');
     if (stream) {
       if (!/^[\w-]+$/.test(stream)) throw new Error('无效资源');
-      const response = await fetchUpstream(`${session.base}/Items/${stream}/PlaybackInfo?${new URLSearchParams({ UserId: session.user, DeviceId: EMBY_DEVICE_ID })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Emby-Token': session.token, 'X-Emby-Authorization': authorization }, body: JSON.stringify({ UserId: session.user, IsPlayback: true, AutoOpenLiveStream: true, MaxStreamingBitrate: 20000000, MaxAudioChannels: 2, EnableDirectPlay: true, EnableDirectStream: true, EnableTranscoding: true, DeviceProfile: embyPlaybackProfile }), timeoutMs: 15000, retries: 0, redirect: 'error', safeRedirects: false });
+      const response = await fetchUpstream(`${session.base}/Items/${stream}/PlaybackInfo?${new URLSearchParams({ UserId: session.user, DeviceId: EMBY_DEVICE_ID })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Emby-Token': session.token, 'X-Emby-Authorization': authorization }, body: JSON.stringify({ UserId: session.user, IsPlayback: true, AutoOpenLiveStream: true, MaxStreamingBitrate: 20000000, MaxAudioChannels: 2, EnableDirectPlay: true, EnableDirectStream: true, EnableTranscoding: true, DeviceProfile: browserEmbyProfile(params.get('hevc') === '1', params.get('ac3') === '1', params.get('eac3') === '1') }), timeoutMs: 15000, retries: 0, redirect: 'error', safeRedirects: false });
       if (!response.ok) throw new Error(`Emby 播放协商失败（${response.status}），请检查账号播放权限`);
-      const playback = selectEmbyPlayback(session, stream, await response.json());
+      const data = await response.json();
+      let playback;
+      try { playback = selectEmbyPlayback(session, stream, data); }
+      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Emby 播放协商失败', diagnostics: playbackDiagnostics(data) }, { status: 422, headers: { 'Cache-Control': 'no-store' } }); }
       if (params.has('resolve')) return NextResponse.json(playback, { headers: { 'Cache-Control': 'no-store' } });
       return new NextResponse(null, { status: 302, headers: { Location: playback.url, 'Cache-Control': 'no-store' } });
     }

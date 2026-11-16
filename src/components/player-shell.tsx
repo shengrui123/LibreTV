@@ -13,6 +13,7 @@ import {
 import { attachVolumeBoost, type VolumeBoostHandle } from '@/lib/volume-boost';
 import { CONTROL_SHOW_CLASS, syncMiniProgressBar } from '@/lib/mini-progress-bar';
 import { loadCacheSettings } from '@/lib/video-cache';
+import { copyToClipboard } from '@/lib/clipboard';
 import { formatTime } from '@/lib/utils';
 import { prefersTouchPointer } from '@/lib/touch-pointer';
 import {
@@ -146,6 +147,7 @@ export function PlayerShell({
   const hlsRef = useRef<Hls | null>(null);
   const volumeBoostRef = useRef<VolumeBoostHandle | null>(null);
   const [error, setError] = useState('');
+  const [embyDiagnostic, setEmbyDiagnostic] = useState('');
   const [hint, setHint] = useState('');
   // 起播前的品牌占位图（沿用旧版 nomedia 素材），实际开始播放后隐藏
   const [showPoster, setShowPoster] = useState(true);
@@ -410,9 +412,18 @@ export function PlayerShell({
 
     if (mediaUrl.startsWith('/api/emby?stream=')) {
       hls.destroy(); hlsRef.current = null;
-      void fetch(`${mediaUrl}&resolve=1`).then(async (response) => {
+      setEmbyDiagnostic('');
+      const capabilities = new URLSearchParams({
+        hevc: video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') ? '1' : '0',
+        ac3: video.canPlayType('audio/mp4; codecs="ac-3"') ? '1' : '0',
+        eac3: video.canPlayType('audio/mp4; codecs="ec-3"') ? '1' : '0',
+      });
+      void fetch(`${mediaUrl}&resolve=1&${capabilities}`).then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Emby 播放地址获取失败');
+        if (!response.ok) {
+          if (currentMediaUrlRef.current === mediaUrl && data.diagnostics) setEmbyDiagnostic(JSON.stringify({ ...data.diagnostics, browser: navigator.userAgent, capabilities: Object.fromEntries(capabilities) }, null, 2));
+          throw new Error(data.error || 'Emby 播放地址获取失败');
+        }
         if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setupHls(video, data.url, false);
       }).catch((error) => { if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setError(error instanceof Error ? error.message : 'Emby 连接失败'); });
       return;
@@ -1132,6 +1143,7 @@ export function PlayerShell({
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80">
           <p className="text-danger text-sm">{error}</p>
+          {embyDiagnostic && <button type="button" className="btn-ghost btn-sm mt-3" onClick={() => { void copyToClipboard(embyDiagnostic).then((ok) => showHint(ok ? '诊断信息已复制' : '复制失败')); }}>复制诊断信息</button>}
           <button className="btn-ghost text-xs" onClick={() => location.reload()}>
             重新加载
           </button>
