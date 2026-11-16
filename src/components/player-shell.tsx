@@ -410,6 +410,15 @@ export function PlayerShell({
 
     if (mediaUrl.startsWith('/api/emby?stream=')) {
       hls.destroy(); hlsRef.current = null;
+      void fetch(`${mediaUrl}&resolve=1`).then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Emby 播放地址获取失败');
+        if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setupHls(video, data.url, false);
+      }).catch((error) => { if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setError(error instanceof Error ? error.message : 'Emby 连接失败'); });
+      return;
+    }
+    if (mediaUrl.startsWith('/api/emby?media=') && mediaUrl.endsWith('&format=mp4')) {
+      hls.destroy(); hlsRef.current = null;
       video.removeAttribute('crossorigin');
       video.src = mediaUrl;
       video.load();

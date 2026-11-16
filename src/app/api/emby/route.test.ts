@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, POST } from './route';
+import { embyMediaUrl } from '@/lib/emby-playback';
 import { EMBY_COOKIE, sealEmby } from '@/lib/emby-session';
-const mocks = vi.hoisted(() => ({ fetch: vi.fn(), guard: vi.fn() }));
-vi.mock('@/lib/fetch-utils', () => ({ fetchUpstream: mocks.fetch }));
+const mocks = vi.hoisted(() => ({ stream: vi.fn(), fetch: vi.fn(), guard: vi.fn() }));
+vi.mock('@/lib/fetch-utils', () => ({ fetchUpstream: mocks.fetch, fetchWithSafeRedirects: mocks.stream }));
 vi.mock('@/lib/api-guard', () => ({ guardRequest: mocks.guard }));
-beforeEach(() => { mocks.fetch.mockReset(); mocks.guard.mockReturnValue(null); });
+beforeEach(() => { mocks.fetch.mockReset(); mocks.stream.mockReset(); mocks.guard.mockReturnValue(null); });
 const cookie = () => `${EMBY_COOKIE}=${sealEmby({ base: 'https://emby.example', token: 'private-token', user: 'u1', name: 'User', expires: Date.now() + 100000 })}`;
 describe('playback-only Emby integration', () => {
   it('returns connection status without browsing the media library', async () => {
@@ -29,6 +30,17 @@ describe('playback-only Emby integration', () => {
     expect(await response.json()).toMatchObject({ name: '家庭资源库' });
     const status = await GET(new NextRequest('https://local/api/emby', { headers: { cookie: `${EMBY_COOKIE}=${response.cookies.get(EMBY_COOKIE)!.value}` } }));
     expect(await status.json()).toMatchObject({ connected: true, name: '家庭资源库', url: 'http://emby.example:8096/emby', notes: '账号备注' });
+  });
+  it('rewrites HLS playlists so segments and keys retain Emby authentication', async () => {
+    const session = { base: 'https://emby.example', token: 'private-token', user: 'u1', name: 'User', expires: Date.now() + 100000 };
+    const url = embyMediaUrl(session, 'https://emby.example/videos/1/master.m3u8', 'hls');
+    mocks.stream.mockResolvedValue({ res: new Response('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="key"\nsegment.ts\n', { headers: { 'Content-Type': 'application/vnd.apple.mpegurl' } }), finalUrl: 'https://emby.example/videos/1/master.m3u8' });
+    const response = await GET(new NextRequest('https://local' + url, { headers: { cookie: cookie() } }));
+    const text = await response.text();
+    expect(response.status).toBe(200);
+    expect(text).toContain('URI="/api/emby?media=');
+    expect(text).not.toContain('private-token');
+    expect(text).not.toContain('\nsegment.ts');
   });
   it('stores a login token in an HttpOnly cookie without returning it or storing the password', async () => {
     mocks.fetch.mockResolvedValue(Response.json({ AccessToken: 'secret', User: { Id: 'u1', Name: 'User' } }));

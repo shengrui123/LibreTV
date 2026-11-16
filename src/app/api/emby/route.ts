@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { guardRequest } from '@/lib/api-guard';
 import { fetchWithSafeRedirects, fetchUpstream } from '@/lib/fetch-utils';
 import { EMBY_COOKIE, openEmby, sealEmby, type EmbySession } from '@/lib/emby-session';
+import { embyMediaUrl, selectEmbyPlayback, embyPlaybackProfile, EMBY_DEVICE_ID } from '@/lib/emby-playback';
 import { splitSeason } from '@/lib/tmdb-series';
 export const runtime = 'nodejs';
 const authorization = 'Emby Client="LibreTV", Device="Web", DeviceId="libretv-web", Version="1.0"';
@@ -49,19 +50,39 @@ export async function GET(req: NextRequest) {
       const sorted = items.slice().sort((a,b) => (a.ParentIndexNumber || 0) - (b.ParentIndexNumber || 0) || (a.IndexNumber || 0) - (b.IndexNumber || 0));
       return NextResponse.json({ episodes: sorted.map((entry) => `/api/emby?stream=${encodeURIComponent(entry.Id)}`), episodeNames: sorted.map((entry) => entry.Type === 'Episode' ? `第 ${entry.IndexNumber} 集 · ${entry.Name}` : entry.Name), videoInfo: { title: item.Name, sourceKey: 'emby', sourceName: 'Emby' } }, { headers: { 'Cache-Control': 'no-store' } });
     }
+    const media = params.get('media');
+    if (media) {
+      const ticket = openEmby(media);
+      if (!ticket?.target || ticket.token !== session.token || ticket.user !== session.user || ticket.base !== session.base) throw new Error('播放地址已失效，请重新选择 Emby 资源');
+      const { res, finalUrl } = await fetchWithSafeRedirects(ticket.target, { headers: req.headers.get('range') ? { Range: req.headers.get('range')! } : {}, signal: req.signal }, { headerTimeoutMs: 20000 });
+      if (!res.ok && res.status !== 416) { await res.body?.cancel(); throw new Error(`Emby 视频流请求失败（${res.status}），请检查播放权限和服务器连接`); }
+      const headers = new Headers({ 'Cache-Control': 'no-store' });
+      const playlist = /mpegurl/i.test(res.headers.get('content-type') || '') || /\.m3u8(?:[?]|$)/i.test(finalUrl);
+      if (playlist) {
+        const rewrite = (uri: string) => {
+          const target = new URL(uri, finalUrl);
+          if (target.origin === new URL(session.base).origin && !target.searchParams.has('api_key')) target.searchParams.set('api_key', session.token);
+          return embyMediaUrl(session, target.href);
+        };
+        const text = (await res.text()).split('\n').map((line) => {
+          if (!line.trim()) return line;
+          if (line.startsWith('#')) return line.replace(/URI="([^"\n]+)"/g, (_, uri: string) => `URI="${rewrite(uri)}"`);
+          return rewrite(line.trim());
+        }).join('\n');
+        headers.set('Content-Type', 'application/vnd.apple.mpegurl');
+        return new NextResponse(text, { headers });
+      }
+      for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) { const value = res.headers.get(name); if (value) headers.set(name, value); }
+      return new NextResponse(res.body, { status: res.status, headers });
+    }
     const stream = params.get('stream');
     if (stream) {
       if (!/^[\w-]+$/.test(stream)) throw new Error('无效资源');
-      const item: Item = await get(session, `Users/${encodeURIComponent(session.user)}/Items/${stream}`, { Fields: 'MediaSources' });
-      const query = new URLSearchParams({ Static: 'true', api_key: session.token, MediaSourceId: item.MediaSources?.[0]?.Id || stream, PlaySessionId: crypto.randomUUID() });
-      const target = `${session.base}/Videos/${stream}/stream?${query}`;
-      if (session.base.startsWith('http:')) {
-        const { res } = await fetchWithSafeRedirects(target, { headers: req.headers.get('range') ? { Range: req.headers.get('range')! } : {}, signal: req.signal }, { headerTimeoutMs: 15000 });
-        const headers = new Headers({ 'Cache-Control': 'no-store' });
-        for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) { const value = res.headers.get(name); if (value) headers.set(name, value); }
-        return new NextResponse(res.body, { status: res.status, headers });
-      }
-      return new NextResponse(null, { status: 302, headers: { Location: target, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } });
+      const response = await fetchUpstream(`${session.base}/Items/${stream}/PlaybackInfo?${new URLSearchParams({ UserId: session.user, DeviceId: EMBY_DEVICE_ID })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Emby-Token': session.token, 'X-Emby-Authorization': authorization }, body: JSON.stringify({ UserId: session.user, IsPlayback: true, AutoOpenLiveStream: true, MaxStreamingBitrate: 20000000, MaxAudioChannels: 2, EnableDirectPlay: true, EnableDirectStream: true, EnableTranscoding: true, DeviceProfile: embyPlaybackProfile }), timeoutMs: 15000, retries: 0, redirect: 'error', safeRedirects: false });
+      if (!response.ok) throw new Error(`Emby 播放协商失败（${response.status}），请检查账号播放权限`);
+      const playback = selectEmbyPlayback(session, stream, await response.json());
+      if (params.has('resolve')) return NextResponse.json(playback, { headers: { 'Cache-Control': 'no-store' } });
+      return new NextResponse(null, { status: 302, headers: { Location: playback.url, 'Cache-Control': 'no-store' } });
     }
     const title = params.get('title');
     if (!title) return NextResponse.json({ connected: true, name: session.name, url: session.base, notes: session.notes || '' }, { headers: { 'Cache-Control': 'no-store' } });
