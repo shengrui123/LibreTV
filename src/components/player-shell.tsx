@@ -5,6 +5,7 @@ import Artplayer from 'artplayer';
 import { createPortal } from 'react-dom';
 import Hls, { type HlsConfig } from 'hls.js';
 
+import { mediaFormat, formatFailure, type MediaFormat } from '@/lib/media-format';
 import { PlaybackRecovery, describeHlsError } from '@/lib/playback-recovery';
 import { createHlsLoader } from '@/lib/hls-loader';
 import {
@@ -146,6 +147,9 @@ export function PlayerShell({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const artRef = useRef<any>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const otherEngineRef = useRef<(() => void) | null>(null);
+  const formatRef = useRef<MediaFormat>('unknown');
+  const embyCompatibilityRef = useRef(false);
   const volumeBoostRef = useRef<VolumeBoostHandle | null>(null);
   const [error, setError] = useState('');
   const [embyDiagnostic, setEmbyDiagnostic] = useState('');
@@ -241,7 +245,7 @@ export function PlayerShell({
   // 当前集预取（episodeKey 缺省 = 关闭，见 ensure 内部 settings.enabled 判断）
   const ensurePrefetch = (mediaUrl: string, currentTime: number, horizonSeconds?: number) => {
     const p = propsRef.current;
-    if (mediaUrl.startsWith('/api/emby?')) return;
+    if (mediaUrl.startsWith('/api/emby?') || formatRef.current !== 'hls') return;
     if (!p.episodeKey) return;
     getVideoPrefetcher().ensure({
       m3u8Url: mediaUrl,
@@ -365,9 +369,10 @@ export function PlayerShell({
    * 自动改走同源 cookie 鉴权的 /api/proxy 重试一次。
    * 注意：不销毁 ArtPlayer，只销毁并重建 hls，从而保留网页全屏等播放器状态。
    */
-  const setupHls = (video: HTMLVideoElement, mediaUrl: string, allowProxyFallback: boolean) => {
+  const setupHls = (video: HTMLVideoElement, mediaUrl: string, allowProxyFallback: boolean, detected?: MediaFormat) => {
     restoreCleanupRef.current?.();
     restoreCleanupRef.current = null;
+    otherEngineRef.current?.(); otherEngineRef.current = null;
     hlsRef.current?.destroy();
     currentMediaUrlRef.current = mediaUrl;
     const hls = new Hls(buildHlsConfig());
@@ -415,6 +420,13 @@ export function PlayerShell({
       hls.destroy(); hlsRef.current = null;
       setEmbyDiagnostic('');
       const capabilities = new URLSearchParams({
+        av1: video.canPlayType('video/mp4; codecs="av01.0.05M.08"') ? '1' : '0',
+        vp9: video.canPlayType('video/webm; codecs="vp9"') ? '1' : '0',
+        vp8: video.canPlayType('video/webm; codecs="vp8"') ? '1' : '0',
+        opus: video.canPlayType('audio/webm; codecs="opus"') ? '1' : '0',
+        vorbis: video.canPlayType('audio/ogg; codecs="vorbis"') ? '1' : '0',
+        webm: video.canPlayType('video/webm') ? '1' : '0',
+        ogg: video.canPlayType('video/ogg; codecs="theora"') ? '1' : '0',
         hevc: video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') ? '1' : '0',
         ac3: video.canPlayType('audio/mp4; codecs="ac-3"') ? '1' : '0',
         eac3: video.canPlayType('audio/mp4; codecs="ec-3"') ? '1' : '0',
@@ -429,7 +441,41 @@ export function PlayerShell({
       }).catch((error) => { if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setError(error instanceof Error ? error.message : 'Emby 连接失败'); });
       return;
     }
-    if (mediaUrl.startsWith('/api/emby?media=') && (mediaUrl.endsWith('&format=mp4') || mediaUrl.endsWith('&format=native'))) {
+    const format = detected ?? mediaFormat(mediaUrl);
+    formatRef.current = format;
+    if (!detected && !['hls', 'dash'].includes(format) && /^https?:\/\//i.test(mediaUrl)) {
+      hls.destroy(); hlsRef.current = null;
+      const controller = new AbortController(); otherEngineRef.current = () => controller.abort();
+      void fetch(`/api/media-format?${new URLSearchParams({ url: mediaUrl })}`, { signal: controller.signal }).then(async (response) => {
+        const data = response.ok ? await response.json() : { format: 'unknown' };
+        if (!controller.signal.aborted && currentMediaUrlRef.current === mediaUrl && video.isConnected) setupHls(video, mediaUrl, allowProxyFallback, data.format === 'unknown' ? (format === 'unknown' ? 'hls' : format) : data.format);
+      }).catch(() => { if (!controller.signal.aborted && currentMediaUrlRef.current === mediaUrl) setupHls(video, mediaUrl, allowProxyFallback, format === 'unknown' ? 'hls' : format); });
+      return;
+    }
+    if (format === 'dash' || format === 'flv' || format === 'ts') {
+      hls.destroy(); hlsRef.current = null;
+      let disposed = false;
+      let cleanup: (() => void) | undefined;
+      otherEngineRef.current = () => { disposed = true; cleanup?.(); };
+      video.crossOrigin = 'anonymous';
+      void (async () => {
+        if (format === 'dash') {
+          const dash = await import('dashjs'); if (disposed) return;
+          const player = dash.MediaPlayer().create(); cleanup = () => player.reset();
+          player.on(dash.MediaPlayer.events.ERROR, () => { if (!disposed) setError('DASH 加载失败，请检查片源网络、跨域设置或编码兼容性'); });
+          player.initialize(video, mediaUrl, true);
+        } else {
+          const mpegts = (await import('mpegts.js')).default; if (disposed) return;
+          if (!mpegts.isSupported()) throw new Error(formatFailure(format));
+          const player = mpegts.createPlayer({ type: format === 'flv' ? 'flv' : 'mpegts', url: mediaUrl, isLive: false }, { enableWorker: true });
+          cleanup = () => { player.unload(); player.detachMediaElement(); player.destroy(); };
+          player.on(mpegts.Events.ERROR, () => { if (!disposed) setError(formatFailure(format)); });
+          player.attachMediaElement(video); player.load(); void player.play()?.catch(() => {});
+        }
+      })().catch((error) => { if (!disposed) setError(error instanceof Error ? error.message : formatFailure(format)); });
+      return;
+    }
+    if (format !== 'hls' || video.canPlayType('application/vnd.apple.mpegurl')) {
       hls.destroy(); hlsRef.current = null;
       video.removeAttribute('crossorigin');
       video.src = mediaUrl;
@@ -477,11 +523,12 @@ export function PlayerShell({
           // （同源 cookie 鉴权，规避 CORS/防盗链/分片被拒）
           if (
             allowProxyFallback &&
+            !mediaUrl.startsWith('/api/emby?') &&
             !mediaUrl.startsWith('/api/proxy') &&
             (decision.attempt >= 2 || data.details === 'manifestLoadError')
           ) {
             showHint('直连失败，改用代理重试...');
-            setupHls(video, `/api/proxy?url=${encodeURIComponent(mediaUrl)}`, false);
+            setupHls(video, `/api/proxy?url=${encodeURIComponent(mediaUrl)}`, false, 'hls');
             return;
           }
           showHint(`${decision.reason}（第 ${decision.attempt} 次）...`);
@@ -514,6 +561,7 @@ export function PlayerShell({
   const loadEpisode = (targetUrl: string) => {
     if (!targetUrl) return;
     mediaHealthyRef.current = true;
+    embyCompatibilityRef.current = false;
     playbackStartedRef.current = false;
     videoErrorRetryUsedRef.current = false;
     restoredRef.current = false;
@@ -733,6 +781,12 @@ export function PlayerShell({
     });
     art.on('video:error', () => {
       mediaHealthyRef.current = false;
+      if (propsRef.current.url.startsWith('/api/emby?stream=') && !embyCompatibilityRef.current) {
+        embyCompatibilityRef.current = true;
+        showHint('正在请求 Emby 兼容播放…');
+        setupHls(art.video, `${propsRef.current.url}&compatible=1`, false);
+        return;
+      }
       // 起播阶段的 video 元素级错误（MSE/解码偶发失败）：重建一次播放链路自愈，
       // 而不是直接钉死错误遮罩——重建后视频轨重新 append，黑屏有声即可解除
       if (!playbackStartedRef.current && !videoErrorRetryUsedRef.current) {
@@ -741,7 +795,7 @@ export function PlayerShell({
         setupHls(art.video, currentMediaUrlRef.current, true);
         return;
       }
-      setError('视频播放失败，请尝试其他视频源');
+      setError(formatFailure(formatRef.current));
     });
     art.on('video:timeupdate', () => {
       const now = Date.now();
@@ -1012,6 +1066,7 @@ export function PlayerShell({
       Artplayer.CONTROL_HIDE_TIME = ART_DEFAULT_CONTROL_HIDE_MS;
       hlsRef.current?.destroy();
       hlsRef.current = null;
+      otherEngineRef.current?.(); otherEngineRef.current = null;
       recoveryRef.current?.dispose();
       getVideoPrefetcher().stop();
       // 播放页可能仍持有读取接口：销毁前显式置空，避免「记录当前」读到已销毁实例
@@ -1154,6 +1209,7 @@ export function PlayerShell({
 
           <p className="max-w-xl text-danger text-sm leading-relaxed">{error}</p>
           {embyDiagnostic && <button type="button" className="btn-primary min-h-11 mt-2" onClick={() => { void copyToClipboard(embyDiagnostic).then((ok) => showHint(ok ? '诊断信息已复制' : '复制失败')); }}>复制诊断信息</button>}
+          {propsRef.current.url.startsWith('/api/emby?stream=') && <button type="button" className="btn-ghost min-h-11" onClick={() => { setError(''); embyCompatibilityRef.current = true; const video = artRef.current?.video; if (video) setupHls(video, `${propsRef.current.url}&compatible=1`, false); }}>尝试兼容播放（需要 Emby 支持）</button>}
           {embyDiagnostic && <details className="w-full max-w-xl text-left text-white/75 text-xs"><summary className="cursor-pointer py-2 text-center">查看诊断信息（也可手动复制）</summary><textarea aria-label="诊断信息" readOnly value={embyDiagnostic} onFocus={(event) => event.currentTarget.select()} className="mt-2 h-32 w-full rounded-xl border border-white/20 bg-white/5 p-3 text-xs text-white select-text" /></details>}
           <button className="btn-ghost text-xs min-h-11" onClick={() => location.reload()}>
             重新加载

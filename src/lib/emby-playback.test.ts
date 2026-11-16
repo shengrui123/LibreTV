@@ -31,6 +31,16 @@ describe('Emby playback negotiation', () => {
     expect(result.type).toBe('native'); expect(target).toBe(original); expect(target).not.toContain('secret');
     expect(() => selectEmbyPlayback(session, '12', { MediaSources: [{ Id: 'source', SupportsDirectPlay: true, DirectStreamUrl: 'file:///etc/passwd' }] })).toThrow('无效');
   });
+  it('requests a genuinely compatible stream when native playback fails', () => {
+    const data = { MediaSources: [{ Id: 'source', Container: 'mkv', SupportsDirectPlay: true, DirectStreamUrl: '/emby/videos/12/stream.mkv', TranscodingUrl: '/emby/videos/12/master.m3u8' }] };
+    expect(selectEmbyPlayback(session, '12', data).type).toBe('native');
+    expect(selectEmbyPlayback(session, '12', data, true).type).toBe('hls');
+    expect(() => selectEmbyPlayback(session, '12', { MediaSources: [{ ...data.MediaSources[0], TranscodingUrl: undefined }] }, true)).toThrow('转封装或转码');
+  });
+  it('adds WebM only for measured container, audio and video support', () => {
+    expect(browserEmbyProfile(false, false, false, { webm: true }).DirectPlayProfiles).toHaveLength(1);
+    expect(browserEmbyProfile(false, false, false, { webm: true, vp9: true, opus: true }).DirectPlayProfiles[1]).toMatchObject({ Container: 'webm', VideoCodec: 'vp9', AudioCodec: 'opus' });
+  });
   it('does not include playback URLs or tokens in diagnostics', () => {
     const data = playbackDiagnostics({ MediaSources: [{ Id: 'private-id', Container: 'mkv', DirectStreamUrl: 'https://example.test?api_key=secret', MediaStreams: [{ Type: 'Video', Codec: 'hevc' }] }] });
     expect(JSON.stringify(data)).not.toContain('secret'); expect(JSON.stringify(data)).not.toContain('private-id');
@@ -49,7 +59,7 @@ describe('Emby playback negotiation', () => {
   });
   it('reports denied playback and unsupported formats instead of returning an unplayable file', () => {
     expect(() => selectEmbyPlayback(session, '1', { ErrorCode: 'NotAllowed' })).toThrow('NotAllowed');
-    expect(() => selectEmbyPlayback(session, '1', { MediaSources: [{ Id: 'x', Container: 'mkv' }] })).toThrow('未提供兼容播放地址');
+    expect(() => selectEmbyPlayback(session, '1', { MediaSources: [{ Id: 'x', Container: 'mkv' }] })).toThrow('未提供可用的播放地址');
     expect(() => selectEmbyPlayback(session, '1', { MediaSources: [{ Id: 'x', TranscodingUrl: 'https://other.example/master.m3u8' }] })).toThrow('不同服务器');
   });
 });

@@ -78,11 +78,14 @@ export async function GET(req: NextRequest) {
     const stream = params.get('stream');
     if (stream) {
       if (!/^[\w-]+$/.test(stream)) throw new Error('无效资源');
-      const response = await fetchUpstream(`${session.base}/Items/${stream}/PlaybackInfo?${new URLSearchParams({ UserId: session.user, DeviceId: EMBY_DEVICE_ID })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Emby-Token': session.token, 'X-Emby-Authorization': authorization }, body: JSON.stringify({ UserId: session.user, IsPlayback: true, AutoOpenLiveStream: true, MaxStreamingBitrate: 20000000, MaxAudioChannels: 2, EnableDirectPlay: true, EnableDirectStream: true, EnableTranscoding: true, DeviceProfile: browserEmbyProfile(params.get('hevc') === '1', params.get('ac3') === '1', params.get('eac3') === '1') }), timeoutMs: 15000, retries: 0, redirect: 'error', safeRedirects: false });
+      const compatible = params.get('compatible') === '1';
+      const profile = browserEmbyProfile(params.get('hevc') === '1', params.get('ac3') === '1', params.get('eac3') === '1', { av1: params.get('av1') === '1', vp9: params.get('vp9') === '1', vp8: params.get('vp8') === '1', opus: params.get('opus') === '1', vorbis: params.get('vorbis') === '1', webm: params.get('webm') === '1', ogg: params.get('ogg') === '1' });
+      if (compatible) profile.DirectPlayProfiles = [];
+      const response = await fetchUpstream(`${session.base}/Items/${stream}/PlaybackInfo?${new URLSearchParams({ UserId: session.user, DeviceId: EMBY_DEVICE_ID })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Emby-Token': session.token, 'X-Emby-Authorization': authorization }, body: JSON.stringify({ UserId: session.user, IsPlayback: true, AutoOpenLiveStream: true, MaxStreamingBitrate: 20000000, MaxAudioChannels: 2, EnableDirectPlay: !compatible, EnableDirectStream: true, EnableTranscoding: true, AllowVideoStreamCopy: true, AllowAudioStreamCopy: true, DeviceProfile: profile }), timeoutMs: 15000, retries: 0, redirect: 'error', safeRedirects: false });
       if (!response.ok) throw new Error(`Emby 播放协商失败（${response.status}），请检查账号播放权限`);
       const data = await response.json();
       let playback;
-      try { playback = selectEmbyPlayback(session, stream, data); }
+      try { playback = selectEmbyPlayback(session, stream, data, compatible); }
       catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Emby 播放协商失败', diagnostics: playbackDiagnostics(data) }, { status: 422, headers: { 'Cache-Control': 'no-store' } }); }
       if (params.has('resolve')) return NextResponse.json({ ...playback, diagnostics: playbackDiagnostics(data) }, { headers: { 'Cache-Control': 'no-store' } });
       return new NextResponse(null, { status: 302, headers: { Location: playback.url, 'Cache-Control': 'no-store' } });

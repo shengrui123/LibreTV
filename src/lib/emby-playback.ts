@@ -15,17 +15,22 @@ export interface EmbyPlaybackData { ErrorCode?: string; PlaySessionId?: string; 
 export function playbackDiagnostics(data: EmbyPlaybackData) {
   return { version: 3, errorCode: data.ErrorCode, sources: (data.MediaSources || []).slice(0, 10).map((source) => ({ container: source.Container, directPlay: !!source.SupportsDirectPlay, directStream: !!source.SupportsDirectStream, transcoding: !!source.SupportsTranscoding, hasDirectUrl: !!source.DirectStreamUrl, hasTranscodingUrl: !!source.TranscodingUrl, codecs: source.MediaStreams?.filter((stream) => stream.Type === 'Video' || stream.Type === 'Audio').map((stream) => ({ type: stream.Type, codec: stream.Codec })) })) };
 }
-export function browserEmbyProfile(hevc: boolean, ac3: boolean, eac3: boolean) {
-  return { ...embyPlaybackProfile, DirectPlayProfiles: [{ ...embyPlaybackProfile.DirectPlayProfiles[0], VideoCodec: hevc ? 'h264,hevc' : 'h264', AudioCodec: ['aac', 'mp3', ...(ac3 ? ['ac3'] : []), ...(eac3 ? ['eac3'] : [])].join(',') }] };
+export function browserEmbyProfile(hevc: boolean, ac3: boolean, eac3: boolean, extra: { av1?: boolean; vp9?: boolean; vp8?: boolean; opus?: boolean; vorbis?: boolean; webm?: boolean; ogg?: boolean } = {}) {
+  const DirectPlayProfiles = [{ ...embyPlaybackProfile.DirectPlayProfiles[0], VideoCodec: ['h264', ...(hevc ? ['hevc'] : []), ...(extra.av1 ? ['av1'] : [])].join(','), AudioCodec: ['aac', 'mp3', ...(ac3 ? ['ac3'] : []), ...(eac3 ? ['eac3'] : [])].join(',') }];
+  const webmVideo = [...(extra.vp9 ? ['vp9'] : []), ...(extra.vp8 ? ['vp8'] : [])];
+  const webmAudio = [...(extra.opus ? ['opus'] : []), ...(extra.vorbis ? ['vorbis'] : [])];
+  if (extra.webm && webmVideo.length && webmAudio.length) DirectPlayProfiles.push({ Type: 'Video', Container: 'webm', VideoCodec: webmVideo.join(','), AudioCodec: webmAudio.join(',') });
+  if (extra.ogg && extra.vorbis) DirectPlayProfiles.push({ Type: 'Video', Container: 'ogg,ogv', VideoCodec: 'theora', AudioCodec: 'vorbis' });
+  return { ...embyPlaybackProfile, DirectPlayProfiles };
 }
-export function selectEmbyPlayback(session: EmbySession, id: string, data: EmbyPlaybackData) {
+export function selectEmbyPlayback(session: EmbySession, id: string, data: EmbyPlaybackData, compatible = false) {
   if (data.ErrorCode) throw new Error(`Emby 拒绝播放：${data.ErrorCode}，请检查账号播放/转码权限`);
   const sources = data.MediaSources || [];
   // Prefer the server-provided URL: remote/STRM and MKV links need not end in .mp4.
-  const directStream = sources.find((entry) => (entry.SupportsDirectPlay || entry.SupportsDirectStream) && entry.DirectStreamUrl);
-  const direct = directStream ? undefined : sources.find((source) => source.SupportsDirectPlay && ['mp4', 'm4v'].includes(source.Container || ''));
+  const directStream = compatible ? undefined : sources.find((entry) => (entry.SupportsDirectPlay || entry.SupportsDirectStream) && entry.DirectStreamUrl);
+  const direct = compatible || directStream ? undefined : sources.find((source) => source.SupportsDirectPlay && ['mp4', 'm4v'].includes(source.Container || ''));
   const source = direct || directStream || sources.find((entry) => entry.TranscodingUrl);
-  if (!source) throw new Error('Emby 返回的媒体格式与当前浏览器不匹配，且未提供兼容播放地址；请复制诊断信息以确认原因');
+  if (!source) throw new Error(compatible ? 'Emby 未提供兼容播放地址，需要服务方支持转封装或转码；请复制诊断信息确认。' : 'Emby 未提供可用的播放地址，请复制诊断信息以确认原因');
   let target: URL;
   if (direct) {
     target = new URL(`${session.base}/Videos/${id}/stream.mp4`);
