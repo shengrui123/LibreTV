@@ -316,7 +316,10 @@ function HeroSlide({
           )}
         >
           <div className="inline-flex items-center gap-1.5 mb-3 text-[11px] font-semibold text-white">
-            <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">{item.id.startsWith('tmdb-') ? 'TMDB' : '豆瓣'}</span>
+            {item.id.startsWith('tmdb-') ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/images/tmdb-logo.svg" alt="TMDB" width={72} height={10} className="h-auto w-[72px] shrink-0" />
+            ) : <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">豆瓣</span>}
             今日热门 · 第 {rank} 名
           </div>
           {tmdb.data?.logo && !logoFailed ? (
