@@ -19,6 +19,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/components/toast';
 import { useCleanBackdrops } from '@/components/use-clean-backdrops';
 import { useInView } from '@/components/use-in-view';
+import type { TrendingEntry, DetailExtras } from '@/lib/tmdb-trending';
 import type { DoubanAbstract, DoubanItem, SearchResultItem, SourceConfig } from '@/lib/types';
 
 export default function DetailPage() {
@@ -204,7 +205,7 @@ function RecommendationDetail({ item, onBack, playbackSource }: { item: DoubanIt
   const router = useRouter();
   const { toast } = useToast();
   const [introOpen, setIntroOpen] = useState(false);
-  const [trailer, setTrailer] = useState<{ id: string; title: string } | null>(null);
+  const [trailer, setTrailer] = useState<{ id: string; title: string; embedUrl?: string } | null>(null);
   useEffect(() => {
     if (!trailer) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setTrailer(null); };
@@ -247,7 +248,7 @@ function RecommendationDetail({ item, onBack, playbackSource }: { item: DoubanIt
   const abs = useAbstract(item);
   const extras = useQuery({
     queryKey: ['douban-extras', item.id, item.isTv],
-    queryFn: async ({ signal }): Promise<{ people: { name: string; role: string; photo?: string }[]; items: DoubanItem[]; trailers: { id: string; title: string; cover: string; runtime?: string }[] }> => {
+    queryFn: async ({ signal }): Promise<DetailExtras> => {
       const params = new URLSearchParams({ id: item.id, type: item.isTv ? 'tv' : 'movie' });
       const response = await fetch(`/api/douban/extras?${params}`, { signal });
       if (!response.ok) throw new Error('获取失败');
@@ -260,18 +261,20 @@ function RecommendationDetail({ item, onBack, playbackSource }: { item: DoubanIt
   useEffect(() => setLogoFailed(false), [tmdb.data?.logo]);
   const [stillIndex, setStillIndex] = useState(0);
   useEffect(() => setStillIndex(0), [item.id]);
-  const a = abs.data ?? sourceAbstract;
-  const tmdbSeries = useTmdbSeriesMetadata(item.title, a?.year, undefined, !!a?.year && (!!item.isTv || !!a?.episodes));
   const nativeTmdb = useQuery({
-    queryKey: ['tmdb-detail-backdrops-v2', item.id],
+    queryKey: ['tmdb-full-detail-v3', item.id],
     enabled: /^tmdb-(movie|tv)-\d+$/.test(item.id),
-    queryFn: async ({ signal }): Promise<string[]> => {
+    queryFn: async ({ signal }): Promise<TrendingEntry> => {
       const response = await fetch(`/api/tmdb-trending?id=${encodeURIComponent(item.id)}`, { signal });
-      if (!response.ok) throw new Error('获取 TMDB 剧照失败');
-      return (await response.json()).entries[0]?.abstract.stills ?? [];
+      if (!response.ok) throw new Error('获取 TMDB 详情失败');
+      return (await response.json()).entries[0];
     }, staleTime: 30 * 60_000, retry: false,
   });
-  const heroImages = useCleanBackdrops(item.id.startsWith('tmdb-') ? nativeTmdb.data ?? [] : [...(tmdb.data?.backdrops ?? []), ...(tmdbSeries.data?.images ?? [])]);
+  const a = nativeTmdb.data?.abstract ?? abs.data ?? sourceAbstract;
+  const extraData = nativeTmdb.data?.extras ?? extras.data;
+  const extrasLoading = item.id.startsWith('tmdb-') ? nativeTmdb.isLoading : extras.isLoading;
+  const tmdbSeries = useTmdbSeriesMetadata(item.title, a?.year, undefined, !!a?.year && (!!item.isTv || !!a?.episodes));
+  const heroImages = useCleanBackdrops(item.id.startsWith('tmdb-') ? nativeTmdb.data?.abstract.stills ?? [] : [...(tmdb.data?.backdrops ?? []), ...(tmdbSeries.data?.images ?? [])]);
   const heroIndex = stillIndex % Math.max(heroImages.length, 1);
   useEffect(() => {
     if (heroImages.length < 2) return;
@@ -307,13 +310,13 @@ function RecommendationDetail({ item, onBack, playbackSource }: { item: DoubanIt
         {playbackSource && sourceQuery.isLoading && !a && <EpisodeLoadingCards />}
         {playbackSource && sourceQuery.isError && <div className="px-4 sm:px-8 lg:px-12"><ErrorState message="片源资料加载失败，请稍后重试" /></div>}
         {item.isTv && abs.isLoading && !a ? <EpisodeLoadingCards /> : (item.isTv || !!a?.episodes) && <TmdbSeriesPanel key={item.title} title={item.title} year={a?.year} onPlay={(index) => playNow(index)}>{sourceDetail ? <EpisodeRow count={sourceDetail.episodes.length} title={item.title} cover={item.cover} names={sourceDetail.episodeNames} urls={sourceDetail.episodes} onPlay={playNow} /> : <RecommendedEpisodes title={item.title} cover={item.cover} count={a?.episodes} onPlay={(index, name) => { void playNow(index, name); }} />}</TmdbSeriesPanel>}
-        <section aria-label="预告片"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">预告片</h2>{extras.isLoading ? <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">正在获取预告片…</p> : extras.data?.trailers?.length ? <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{extras.data.trailers.map((trailer) => <button key={trailer.id} type="button" onClick={() => setTrailer({ id: trailer.id, title: trailer.title })} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] text-left snap-start group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"><div className="relative aspect-video overflow-hidden rounded-2xl bg-chip"><Cover url={trailer.cover} alt="" className="w-full h-full object-cover" /><span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><span className="absolute inset-0 flex items-center justify-center"><span className="glass glass-clear glass-dark rounded-full p-3"><Icon name="play" className="w-5 h-5" /></span></span>{trailer.runtime && <span className="absolute right-3 bottom-3 text-xs text-white">{trailer.runtime}</span>}</div><span className="block mt-2 text-sm font-medium text-content line-clamp-2">{trailer.title}</span></button>)}</div> : <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">暂无预告片</p>}</section>
-        {abs.isError && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
-        {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo && <CastPortrait url={(extras.data?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
-        {!!extras.data?.items.length && <Row title="相关推荐">{extras.data.items.map((recommendation) => <PosterCard key={recommendation.id} item={recommendation} className={POSTER_W} showTitle onOpen={(picked) => router.push(buildRecommendationDetailUrl(picked, window.location.pathname + window.location.search))} />)}</Row>}
+        <section aria-label="预告片"><h2 className="px-4 sm:px-8 lg:px-12 text-xl sm:text-2xl font-bold">预告片</h2>{extrasLoading ? <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">正在获取预告片…</p> : extraData?.trailers?.length ? <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 sm:px-8 lg:px-12 py-4 snap-x scroll-pl-4 sm:scroll-pl-8 lg:scroll-pl-12">{extraData.trailers.map((trailer) => <button key={trailer.id} type="button" onClick={() => setTrailer({ id: trailer.id, title: trailer.title, embedUrl: trailer.embedUrl })} className="shrink-0 w-[72%] sm:w-[38%] lg:w-[25%] text-left snap-start group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"><div className="relative aspect-video overflow-hidden rounded-2xl bg-chip"><Cover url={trailer.cover} alt="" className="w-full h-full object-cover" /><span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" /><span className="absolute inset-0 flex items-center justify-center"><span className="glass glass-clear glass-dark rounded-full p-3"><Icon name="play" className="w-5 h-5" /></span></span>{trailer.runtime && <span className="absolute right-3 bottom-3 text-xs text-white">{trailer.runtime}</span>}</div><span className="block mt-2 text-sm font-medium text-content line-clamp-2">{trailer.title}</span></button>)}</div> : <p className="px-4 sm:px-8 lg:px-12 mt-3 text-sm text-muted">暂无预告片</p>}</section>
+        {(abs.isError || nativeTmdb.isError) && <p role="status" className="px-4 sm:px-8 lg:px-12 text-sm text-muted">影片资料暂时无法获取，请稍后重试。</p>}
+        {(a?.directors?.length || a?.actors?.length) ? <section aria-label="演职人员" className="px-4 sm:px-8 lg:px-12"><h2 className="text-xl sm:text-2xl font-bold mb-4">演职人员</h2><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">{a?.directors?.map((name, i) => <div key={`director-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extraData?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo && <CastPortrait url={(extraData?.people ?? a.people)?.find((p) => p.name === name && p.role === '导演')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">导演</p></div>)}{a?.actors?.map((name, i) => <div key={`actor-${i}`} className="glass glass-thick rounded-2xl p-4 w-36 shrink-0">{(extraData?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo && <CastPortrait url={(extraData?.people ?? a.people)?.find((p) => p.name === name && p.role === '演员')?.photo} name={name} />}<p className="font-semibold">{name}</p><p className="text-sm text-muted mt-1">演员</p></div>)}</div></section> : null}
+        {!!extraData?.items.length && <Row title="相关推荐">{extraData.items.map((recommendation) => <PosterCard key={recommendation.id} item={recommendation} className={POSTER_W} showTitle onOpen={(picked) => router.push(buildRecommendationDetailUrl(picked, window.location.pathname + window.location.search))} />)}</Row>}
       </div>
       {introOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="影片简介" onClick={() => setIntroOpen(false)} onKeyDown={(event) => { if (event.key === 'Escape') setIntroOpen(false); }}><div className="glass glass-thick rounded-3xl w-full max-w-xl max-h-[75vh] overflow-y-auto p-6 text-content" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between gap-4 mb-4"><h2 className="text-xl font-bold">简介</h2><button autoFocus type="button" aria-label="关闭简介" className="btn-icon-glass" onClick={() => setIntroOpen(false)}><Icon name="close" className="w-5 h-5" /></button></div><p className="whitespace-pre-wrap leading-relaxed">{a?.intro}</p>{a?.comment && <blockquote className="mt-4 text-muted border-l-2 border-brand pl-3">{a.comment}</blockquote>}</div></div>}
-      {trailer && <div className="fixed inset-0 z-[100] bg-black/85 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={trailer.title} onClick={() => setTrailer(null)}><div className="relative w-full max-w-4xl" onClick={(event) => event.stopPropagation()}><button type="button" className="btn-icon-glass absolute -top-12 right-0" aria-label="关闭预告片" onClick={() => setTrailer(null)}><Icon name="close" className="w-5 h-5" /></button><video className="w-full max-h-[75vh] rounded-2xl bg-black" src={`/api/douban/trailer?id=${encodeURIComponent(trailer.id)}`} controls autoPlay playsInline onError={() => toast('预告片暂不可用，请稍后重试', 'warning')} /></div></div>}
+      {trailer && <div className="fixed inset-0 z-[100] bg-black/85 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={trailer.title} onClick={() => setTrailer(null)}><div className="relative w-full max-w-4xl" onClick={(event) => event.stopPropagation()}><button type="button" className="btn-icon-glass absolute -top-12 right-0" aria-label="关闭预告片" onClick={() => setTrailer(null)}><Icon name="close" className="w-5 h-5" /></button>{trailer.embedUrl ? <div><iframe title={trailer.title} src={trailer.embedUrl} className="aspect-video w-full rounded-2xl bg-black" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /><a href={trailer.embedUrl.replace('www.youtube-nocookie.com/embed/', 'www.youtube.com/watch?v=').split('&')[0].replace('?autoplay=1', '')} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-white/80">无法播放？在 YouTube 打开</a></div> : <video className="w-full max-h-[75vh] rounded-2xl bg-black" src={`/api/douban/trailer?id=${encodeURIComponent(trailer.id)}`} controls autoPlay playsInline onError={() => toast('预告片暂不可用，请稍后重试', 'warning')} />}</div></div>}
     </article>
   );
 }
