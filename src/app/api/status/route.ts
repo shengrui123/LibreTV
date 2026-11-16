@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 export async function GET(req: Request) {
   const passwordRequired = isPasswordConfigured();
   const verified = passwordRequired && sessionFromCookieHeader(req.headers.get('cookie'));
-  return NextResponse.json({
+  const response = NextResponse.json({
     passwordRequired,
     verified,
     // 构建时由 next.config.ts 从 package.json 注入
@@ -27,5 +27,8 @@ export async function GET(req: Request) {
     defaultRecommendSource: getEnvRecommendSource() ?? null,
     // 部署者通过 DEFAULT_IMAGE_MODE 指定的封面图加载方式默认值（未配置时为 null）
     defaultImageMode: getEnvImageMode() ?? null,
-  });
+  }, { headers: { 'Cache-Control': 'no-store' } });
+  // Retire the encrypted connection cookie left by the removed integration.
+  response.cookies.set('ltv_emby', '', { path: '/api/emby', maxAge: 0, httpOnly: true, sameSite: 'strict' });
+  return response;
 }

@@ -15,7 +15,6 @@ import {
 import { attachVolumeBoost, type VolumeBoostHandle } from '@/lib/volume-boost';
 import { CONTROL_SHOW_CLASS, syncMiniProgressBar } from '@/lib/mini-progress-bar';
 import { loadCacheSettings } from '@/lib/video-cache';
-import { copyToClipboard } from '@/lib/clipboard';
 import { formatTime } from '@/lib/utils';
 import { prefersTouchPointer } from '@/lib/touch-pointer';
 import {
@@ -149,10 +148,8 @@ export function PlayerShell({
   const hlsRef = useRef<Hls | null>(null);
   const otherEngineRef = useRef<(() => void) | null>(null);
   const formatRef = useRef<MediaFormat>('unknown');
-  const embyCompatibilityRef = useRef(false);
   const volumeBoostRef = useRef<VolumeBoostHandle | null>(null);
   const [error, setError] = useState('');
-  const [embyDiagnostic, setEmbyDiagnostic] = useState('');
   const [hint, setHint] = useState('');
   // 起播前的品牌占位图（沿用旧版 nomedia 素材），实际开始播放后隐藏
   const [showPoster, setShowPoster] = useState(true);
@@ -245,7 +242,7 @@ export function PlayerShell({
   // 当前集预取（episodeKey 缺省 = 关闭，见 ensure 内部 settings.enabled 判断）
   const ensurePrefetch = (mediaUrl: string, currentTime: number, horizonSeconds?: number) => {
     const p = propsRef.current;
-    if (mediaUrl.startsWith('/api/emby?') || formatRef.current !== 'hls') return;
+    if (formatRef.current !== 'hls') return;
     if (!p.episodeKey) return;
     getVideoPrefetcher().ensure({
       m3u8Url: mediaUrl,
@@ -416,31 +413,6 @@ export function PlayerShell({
       restoreEvents.forEach((event) => video.removeEventListener(event, onRestoreEvent));
     };
 
-    if (mediaUrl.startsWith('/api/emby?stream=')) {
-      hls.destroy(); hlsRef.current = null;
-      setEmbyDiagnostic('');
-      const capabilities = new URLSearchParams({
-        av1: video.canPlayType('video/mp4; codecs="av01.0.05M.08"') ? '1' : '0',
-        vp9: video.canPlayType('video/webm; codecs="vp9"') ? '1' : '0',
-        vp8: video.canPlayType('video/webm; codecs="vp8"') ? '1' : '0',
-        opus: video.canPlayType('audio/webm; codecs="opus"') ? '1' : '0',
-        vorbis: video.canPlayType('audio/ogg; codecs="vorbis"') ? '1' : '0',
-        webm: video.canPlayType('video/webm') ? '1' : '0',
-        ogg: video.canPlayType('video/ogg; codecs="theora"') ? '1' : '0',
-        hevc: video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') ? '1' : '0',
-        ac3: video.canPlayType('audio/mp4; codecs="ac-3"') ? '1' : '0',
-        eac3: video.canPlayType('audio/mp4; codecs="ec-3"') ? '1' : '0',
-      });
-      void fetch(`${mediaUrl}&resolve=1&${capabilities}`).then(async (response) => {
-        const data = await response.json();
-        if (currentMediaUrlRef.current === mediaUrl && data.diagnostics) setEmbyDiagnostic(JSON.stringify({ ...data.diagnostics, selectedType: data.type, browser: navigator.userAgent, capabilities: Object.fromEntries(capabilities) }, null, 2));
-        if (!response.ok) {
-          throw new Error(data.error || 'Emby 播放地址获取失败');
-        }
-        if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setupHls(video, data.url, false);
-      }).catch((error) => { if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setError(error instanceof Error ? error.message : 'Emby 连接失败'); });
-      return;
-    }
     const format = detected ?? mediaFormat(mediaUrl);
     formatRef.current = format;
     if (!detected && !['hls', 'dash'].includes(format) && /^https?:\/\//i.test(mediaUrl)) {
@@ -523,7 +495,6 @@ export function PlayerShell({
           // （同源 cookie 鉴权，规避 CORS/防盗链/分片被拒）
           if (
             allowProxyFallback &&
-            !mediaUrl.startsWith('/api/emby?') &&
             !mediaUrl.startsWith('/api/proxy') &&
             (decision.attempt >= 2 || data.details === 'manifestLoadError')
           ) {
@@ -561,7 +532,6 @@ export function PlayerShell({
   const loadEpisode = (targetUrl: string) => {
     if (!targetUrl) return;
     mediaHealthyRef.current = true;
-    embyCompatibilityRef.current = false;
     playbackStartedRef.current = false;
     videoErrorRetryUsedRef.current = false;
     restoredRef.current = false;
@@ -781,12 +751,6 @@ export function PlayerShell({
     });
     art.on('video:error', () => {
       mediaHealthyRef.current = false;
-      if (propsRef.current.url.startsWith('/api/emby?stream=') && !embyCompatibilityRef.current) {
-        embyCompatibilityRef.current = true;
-        showHint('正在请求 Emby 兼容播放…');
-        setupHls(art.video, `${propsRef.current.url}&compatible=1`, false);
-        return;
-      }
       // 起播阶段的 video 元素级错误（MSE/解码偶发失败）：重建一次播放链路自愈，
       // 而不是直接钉死错误遮罩——重建后视频轨重新 append，黑屏有声即可解除
       if (!playbackStartedRef.current && !videoErrorRetryUsedRef.current) {
@@ -1208,9 +1172,6 @@ export function PlayerShell({
         <div role="alert" className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-3 overflow-y-auto bg-black/95 px-5 py-8 text-center" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
 
           <p className="max-w-xl text-danger text-sm leading-relaxed">{error}</p>
-          {embyDiagnostic && <button type="button" className="btn-primary min-h-11 mt-2" onClick={() => { void copyToClipboard(embyDiagnostic).then((ok) => showHint(ok ? '诊断信息已复制' : '复制失败')); }}>复制诊断信息</button>}
-          {propsRef.current.url.startsWith('/api/emby?stream=') && <button type="button" className="btn-ghost min-h-11" onClick={() => { setError(''); embyCompatibilityRef.current = true; const video = artRef.current?.video; if (video) setupHls(video, `${propsRef.current.url}&compatible=1`, false); }}>尝试兼容播放（需要 Emby 支持）</button>}
-          {embyDiagnostic && <details className="w-full max-w-xl text-left text-white/75 text-xs"><summary className="cursor-pointer py-2 text-center">查看诊断信息（也可手动复制）</summary><textarea aria-label="诊断信息" readOnly value={embyDiagnostic} onFocus={(event) => event.currentTarget.select()} className="mt-2 h-32 w-full rounded-xl border border-white/20 bg-white/5 p-3 text-xs text-white select-text" /></details>}
           <button className="btn-ghost text-xs min-h-11" onClick={() => location.reload()}>
             重新加载
           </button>

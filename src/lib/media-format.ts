@@ -20,10 +20,6 @@ export function mediaFormat(url: string, contentType = '', bytes?: Uint8Array): 
   if (mimes[mime]) return mimes[mime];
   try {
     const parsed = new URL(url, 'https://local.invalid');
-    if (parsed.pathname.startsWith('/api/emby')) {
-      const format = parsed.searchParams.get('format');
-      return format === 'hls' ? 'hls' : format === 'mp4' ? 'mp4' : format === 'native' ? 'native' : 'unknown';
-    }
     if (parsed.pathname === '/api/proxy' && parsed.searchParams.get('url')) return mediaFormat(parsed.searchParams.get('url')!);
     return extensions[parsed.pathname.split('.').pop()?.toLowerCase() || ''] || 'unknown';
   } catch { return 'unknown'; }

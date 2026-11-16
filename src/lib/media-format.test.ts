@@ -25,7 +25,6 @@ describe('media format detection', () => {
   it('understands MIME, query-string URLs and extensionless links without inventing a format', () => {
     expect(mediaFormat('https://x/stream?signature=private', 'video/webm')).toBe('webm');
     expect(mediaFormat('/api/proxy?url=https%3A%2F%2Fx%2Ffile.MPD%3Fkey%3D1')).toBe('dash');
-    expect(mediaFormat('/api/emby?media=encrypted&format=native')).toBe('native');
     expect(mediaFormat('https://x/stream')).toBe('unknown');
   });
 });
