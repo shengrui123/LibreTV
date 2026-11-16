@@ -58,7 +58,6 @@ function stars(rate?: string) {
  */
 export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => void; onMore: (item: DoubanItem) => void }) {
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<'douban' | 'tmdb'>('douban');
   const trending = useQuery({
     queryKey: ['tmdb-trending'],
     queryFn: async ({ signal }) => {
@@ -68,7 +67,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
       for (const entry of data.entries) queryClient.setQueryData(['douban-abstract', entry.item.id], entry.abstract);
       return data.entries.map((entry: { item: DoubanItem }) => entry.item) as DoubanItem[];
     },
-    enabled: provider === 'tmdb', staleTime: 30 * 60_000, retry: false,
+    staleTime: 30 * 60_000, retry: false,
   });
   const hero = useQuery({
     queryKey: ['douban-hero', 'movie'],
@@ -90,14 +89,25 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
     : needFallback
       ? (douban.data?.length ? douban.data : fallback.data ?? []).slice(0, HERO_COUNT)
       : [];
-  const items = provider === 'tmdb' ? trending.data ?? [] : doubanItems;
+  // 两个榜单交错展示；同名同类型影片优先保留豆瓣资料。
+  const tmdbItems = trending.data ?? [];
+  const identity = (item: DoubanItem) => `${item.isTv ? 'tv' : 'movie'}:${item.title.normalize('NFKC').replace(/\s+/g, '').toLowerCase()}`;
+  const doubanTitles = new Set(doubanItems.map(identity));
+  const uniqueTmdb = tmdbItems.filter((item) => !doubanTitles.has(identity(item)));
+  const seen = new Set<string>();
+  const items = Array.from({ length: Math.max(doubanItems.length, uniqueTmdb.length) }, (_, i) => [doubanItems[i], uniqueTmdb[i]])
+    .flat().filter((item): item is DoubanItem => {
+      if (!item || seen.has(identity(item))) return false;
+      seen.add(identity(item)); return true;
+    });
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
   const timing = useRef({ index: 0, remaining: HERO_INTERVAL });
 
   const count = items.length;
-  const current = items[index % Math.max(count, 1)];
+  const activeIndex = index % Math.max(count, 1);
+  const current = items[activeIndex];
   const currentAbs = useAbstract(current);
   const ambientStill = currentAbs.data?.stills?.[0];
 
@@ -114,10 +124,10 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
 
   const go = (d: number) => count && setIndex((i) => (i + d + count) % count);
 
-  const controls = <div className="absolute right-4 sm:right-8 top-24 z-20 flex gap-1 rounded-full glass glass-clear p-1" aria-label="热门榜单">{(['douban', 'tmdb'] as const).map((value) => <button type="button" key={value} aria-pressed={provider === value} onClick={() => { setProvider(value); setIndex(0); timing.current = { index: 0, remaining: HERO_INTERVAL }; }} className={cn('rounded-full px-3 py-1.5 text-xs text-white transition-colors', provider === value ? 'bg-white/20 font-semibold' : 'hover:bg-white/10')}>{value === 'douban' ? '豆瓣热门' : 'TMDB 热门'}</button>)}</div>;
   if (!current) {
-    const failed = needFallback && douban.isError && (fallback.isError || (!fallback.isLoading && !fallback.data?.length));
-    return <section className="relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] bg-gradient-to-b from-white/5 to-transparent">{controls}<div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{provider === 'tmdb' ? trending.isError ? <div className="text-center"><p>{trending.error.message}</p><button className="btn-ghost mt-3" onClick={() => void trending.refetch()}>重试</button></div> : trending.isSuccess ? '暂无 TMDB 热门内容' : '正在获取 TMDB 热门…' : failed ? '热门内容暂时无法获取' : '正在加载热门…'}</div></section>;
+    const doubanFailed = needFallback && douban.isError && (fallback.isError || (!fallback.isLoading && !fallback.data?.length));
+    const failed = doubanFailed && (trending.isError || (trending.isSuccess && !trending.data.length));
+    return <section className="relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] bg-gradient-to-b from-white/5 to-transparent"><div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{failed ? '热门内容暂时无法获取' : '正在加载热门…'}</div></section>;
   }
 
   return (
@@ -152,15 +162,14 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
           touchX.current = null;
         }}
       >
-        {controls}
         {items.map((item, i) => (
           <HeroSlide
             key={item.id}
             item={item}
-            active={i === index}
-            position={i === index ? 0 : (i - index + count) % count <= count / 2 ? 1 : -1}
-            preload={i === (index + 1) % count}
-            rank={i + 1}
+            active={i === activeIndex}
+            position={i === activeIndex ? 0 : (i - activeIndex + count) % count <= count / 2 ? 1 : -1}
+            preload={i === (activeIndex + 1) % count}
+            rank={(item.id.startsWith('tmdb-') ? tmdbItems : doubanItems).findIndex((entry) => entry.id === item.id) + 1}
             onPlay={onPlay}
             onMore={onMore}
           />
@@ -172,15 +181,15 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
             <button
               key={item.id}
               aria-label={`第 ${i + 1} 部：${item.title}`}
-              aria-current={i === index}
+              aria-current={i === activeIndex}
               onClick={() => setIndex(i)}
               className="group grid h-8 min-w-5 place-items-center"
             >
               <span className={cn(
                 'relative overflow-hidden rounded-full transition-[width,height] duration-500 motion-reduce:transition-none bg-white/45',
-                i === index ? 'h-1.5 w-6' : cn('group-hover:bg-white/75', count > 6 && i === count - 1 ? 'h-0.5 w-0.5' : count > 6 && i === count - 2 ? 'h-1 w-1' : 'h-1.5 w-1.5')
+                i === activeIndex ? 'h-1.5 w-6' : cn('group-hover:bg-white/75', count > 6 && i === count - 1 ? 'h-0.5 w-0.5' : count > 6 && i === count - 2 ? 'h-1 w-1' : 'h-1.5 w-1.5')
               )}>
-                {i === index && <span
+                {i === activeIndex && <span
                   key={index}
                   className="hero-progress absolute inset-0 rounded-full bg-white origin-left motion-reduce:animate-none motion-reduce:scale-x-100"
                   style={{ animationDuration: `${HERO_INTERVAL}ms`, animationPlayState: paused ? 'paused' : 'running' }}
