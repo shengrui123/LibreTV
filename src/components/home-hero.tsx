@@ -19,8 +19,15 @@ export function useAbstract(item: DoubanItem | null | undefined) {
   const id = item?.id ?? '';
   return useQuery({
     queryKey: ['douban-abstract', id],
-    queryFn: ({ signal }) => api.doubanAbstract(id, signal),
-    enabled: /^\d+$/.test(id),
+    queryFn: async ({ signal }) => {
+      if (id.startsWith('tmdb-')) {
+        const response = await fetch(`/api/tmdb-trending?id=${encodeURIComponent(id)}`, { signal });
+        if (!response.ok) throw new Error('获取 TMDB 详情失败');
+        return (await response.json()).entries[0]?.abstract as DoubanAbstract;
+      }
+      return api.doubanAbstract(id, signal);
+    },
+    enabled: /^\d+$/.test(id) || /^tmdb-(movie|tv)-\d+$/.test(id),
     staleTime: 60 * 60_000,
     retry: false,
   });
@@ -51,6 +58,18 @@ function stars(rate?: string) {
  */
 export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => void; onMore: (item: DoubanItem) => void }) {
   const queryClient = useQueryClient();
+  const [provider, setProvider] = useState<'douban' | 'tmdb'>('douban');
+  const trending = useQuery({
+    queryKey: ['tmdb-trending'],
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/tmdb-trending', { signal });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'TMDB 热门获取失败');
+      for (const entry of data.entries) queryClient.setQueryData(['douban-abstract', entry.item.id], entry.abstract);
+      return data.entries.map((entry: { item: DoubanItem }) => entry.item) as DoubanItem[];
+    },
+    enabled: provider === 'tmdb', staleTime: 30 * 60_000, retry: false,
+  });
   const hero = useQuery({
     queryKey: ['douban-hero', 'movie'],
     queryFn: async ({ signal }) => {
@@ -66,11 +85,12 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
   const needFallback = hero.isError || (hero.isSuccess && hero.data.length === 0);
   const douban = useDoubanList('movie', '热门', needFallback);
   const fallback = useHotList('douban_movie_weekly', needFallback && douban.isError);
-  const items = hero.data?.length
+  const doubanItems = hero.data?.length
     ? hero.data
     : needFallback
       ? (douban.data?.length ? douban.data : fallback.data ?? []).slice(0, HERO_COUNT)
       : [];
+  const items = provider === 'tmdb' ? trending.data ?? [] : doubanItems;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
@@ -94,16 +114,10 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
 
   const go = (d: number) => count && setIndex((i) => (i + d + count) % count);
 
+  const controls = <div className="absolute right-4 sm:right-8 top-24 z-20 flex gap-1 rounded-full glass glass-clear p-1" aria-label="热门榜单">{(['douban', 'tmdb'] as const).map((value) => <button type="button" key={value} aria-pressed={provider === value} onClick={() => { setProvider(value); setIndex(0); timing.current = { index: 0, remaining: HERO_INTERVAL }; }} className={cn('rounded-full px-3 py-1.5 text-xs text-white transition-colors', provider === value ? 'bg-white/20 font-semibold' : 'hover:bg-white/10')}>{value === 'douban' ? '豆瓣热门' : 'TMDB 热门'}</button>)}</div>;
   if (!current) {
     const failed = needFallback && douban.isError && (fallback.isError || (!fallback.isLoading && !fallback.data?.length));
-    return (
-      <div
-        className={cn(
-          'relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] bg-gradient-to-b from-white/5 to-transparent',
-          !failed && 'animate-pulse'
-        )}
-      />
-    );
+    return <section className="relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] bg-gradient-to-b from-white/5 to-transparent">{controls}<div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{provider === 'tmdb' ? trending.isError ? <div className="text-center"><p>{trending.error.message}</p><button className="btn-ghost mt-3" onClick={() => void trending.refetch()}>重试</button></div> : trending.isSuccess ? '暂无 TMDB 热门内容' : '正在获取 TMDB 热门…' : failed ? '热门内容暂时无法获取' : '正在加载热门…'}</div></section>;
   }
 
   return (
@@ -138,6 +152,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
           touchX.current = null;
         }}
       >
+        {controls}
         {items.map((item, i) => (
           <HeroSlide
             key={item.id}
@@ -213,7 +228,7 @@ function HeroSlide({
   const rate = a?.rate || item.rating;
 
   const share = async () => {
-    const url = `https://movie.douban.com/subject/${item.id}/`;
+    const url = item.id.startsWith('tmdb-') ? `https://www.themoviedb.org/${item.isTv ? 'tv' : 'movie'}/${item.id.split('-')[2]}` : `https://movie.douban.com/subject/${item.id}/`;
     try {
       if (navigator.share) await navigator.share({ title: item.title, url });
       else {
@@ -292,7 +307,7 @@ function HeroSlide({
           )}
         >
           <div className="inline-flex items-center gap-1.5 mb-3 text-[11px] font-semibold text-white">
-            <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">豆瓣</span>
+            <span className="rounded bg-[#00b51d] px-1 text-[10px] font-extrabold leading-4">{item.id.startsWith('tmdb-') ? 'TMDB' : '豆瓣'}</span>
             今日热门 · 第 {rank} 名
           </div>
           {tmdb.data?.logo && !logoFailed ? (
@@ -313,7 +328,7 @@ function HeroSlide({
           <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-white/75">
             {rate && (
               <span className="inline-flex items-center gap-1.5">
-                <b className="text-white">豆瓣 {rate}</b>
+                <b className="text-white">{item.id.startsWith('tmdb-') ? 'TMDB' : '豆瓣'} {rate}</b>
                 <span className="text-[#ffcc00] tracking-tight">{stars(rate)}</span>
               </span>
             )}
@@ -423,7 +438,7 @@ export function PreviewModal({
               <div className="flex items-baseline gap-2 mb-3">
                 <span className="text-3xl font-extrabold">{rate}</span>
                 <span className="text-[#ffb800] text-sm">{stars(rate)}</span>
-                <span className="text-sm text-faint">豆瓣评分</span>
+                <span className="text-sm text-faint">{item.id.startsWith('tmdb-') ? 'TMDB 评分' : '豆瓣评分'}</span>
               </div>
             )}
             {a?.intro && <p className="text-[15px] leading-relaxed text-content/85 mb-4">{a.intro}</p>}
