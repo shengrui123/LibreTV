@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       let playback;
       try { playback = selectEmbyPlayback(session, stream, data); }
       catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Emby 播放协商失败', diagnostics: playbackDiagnostics(data) }, { status: 422, headers: { 'Cache-Control': 'no-store' } }); }
-      if (params.has('resolve')) return NextResponse.json(playback, { headers: { 'Cache-Control': 'no-store' } });
+      if (params.has('resolve')) return NextResponse.json({ ...playback, diagnostics: playbackDiagnostics(data) }, { headers: { 'Cache-Control': 'no-store' } });
       return new NextResponse(null, { status: 302, headers: { Location: playback.url, 'Cache-Control': 'no-store' } });
     }
     const title = params.get('title');

@@ -16,6 +16,21 @@ describe('Emby playback negotiation', () => {
     expect(result.type).toBe('mp4');
     expect(openEmby(new URL(result.url, 'https://local').searchParams.get('media')!)?.target).toContain('/stream.mp4?Static=false');
   });
+  it('plays the reported MKV HEVC/EAC3 resource using the URL supplied by Emby', () => {
+    const source = { Id: 'source', Container: 'mkv', SupportsDirectPlay: true, SupportsDirectStream: true, SupportsTranscoding: false, DirectStreamUrl: '/emby/videos/12/stream.mkv?Static=true', MediaStreams: [{ Type: 'Video', Codec: 'hevc' }, { Type: 'Audio', Codec: 'eac3' }] };
+    const result = selectEmbyPlayback(session, '12', { MediaSources: [source] });
+    expect(result.type).toBe('native');
+    const target = openEmby(new URL(result.url, 'https://local').searchParams.get('media')!)?.target;
+    expect(target).toContain('/stream.mkv?Static=true');
+    expect(target).not.toContain('stream.mp4');
+  });
+  it('accepts signed extensionless CDN addresses without leaking the Emby token', () => {
+    const original = 'https://cdn.example/download?id=123&signature=cdn-signature';
+    const result = selectEmbyPlayback(session, '12', { MediaSources: [{ Id: 'source', Container: 'mkv', SupportsDirectPlay: true, DirectStreamUrl: original }] });
+    const target = openEmby(new URL(result.url, 'https://local').searchParams.get('media')!)?.target;
+    expect(result.type).toBe('native'); expect(target).toBe(original); expect(target).not.toContain('secret');
+    expect(() => selectEmbyPlayback(session, '12', { MediaSources: [{ Id: 'source', SupportsDirectPlay: true, DirectStreamUrl: 'file:///etc/passwd' }] })).toThrow('无效');
+  });
   it('does not include playback URLs or tokens in diagnostics', () => {
     const data = playbackDiagnostics({ MediaSources: [{ Id: 'private-id', Container: 'mkv', DirectStreamUrl: 'https://example.test?api_key=secret', MediaStreams: [{ Type: 'Video', Codec: 'hevc' }] }] });
     expect(JSON.stringify(data)).not.toContain('secret'); expect(JSON.stringify(data)).not.toContain('private-id');

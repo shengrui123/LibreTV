@@ -421,15 +421,15 @@ export function PlayerShell({
       });
       void fetch(`${mediaUrl}&resolve=1&${capabilities}`).then(async (response) => {
         const data = await response.json();
+        if (currentMediaUrlRef.current === mediaUrl && data.diagnostics) setEmbyDiagnostic(JSON.stringify({ ...data.diagnostics, selectedType: data.type, browser: navigator.userAgent, capabilities: Object.fromEntries(capabilities) }, null, 2));
         if (!response.ok) {
-          if (currentMediaUrlRef.current === mediaUrl && data.diagnostics) setEmbyDiagnostic(JSON.stringify({ ...data.diagnostics, browser: navigator.userAgent, capabilities: Object.fromEntries(capabilities) }, null, 2));
           throw new Error(data.error || 'Emby 播放地址获取失败');
         }
         if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setupHls(video, data.url, false);
       }).catch((error) => { if (currentMediaUrlRef.current === mediaUrl && video.isConnected) setError(error instanceof Error ? error.message : 'Emby 连接失败'); });
       return;
     }
-    if (mediaUrl.startsWith('/api/emby?media=') && mediaUrl.endsWith('&format=mp4')) {
+    if (mediaUrl.startsWith('/api/emby?media=') && (mediaUrl.endsWith('&format=mp4') || mediaUrl.endsWith('&format=native'))) {
       hls.destroy(); hlsRef.current = null;
       video.removeAttribute('crossorigin');
       video.src = mediaUrl;
