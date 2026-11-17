@@ -13,12 +13,15 @@ export const metadata: Metadata = {
   // POPMOV 图标由同一张用户提供的形象导出为各端需要的尺寸。
   icons: {
     icon: [
-      { url: '/favicon.ico?v=popmov-1', sizes: '48x48' },
-      { url: '/icons/icon-96.png?v=popmov-1', sizes: '96x96', type: 'image/png' },
-      { url: '/icons/icon-192.png?v=popmov-1', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512.png?v=popmov-1', sizes: '512x512', type: 'image/png' },
+      { url: '/brand/popmov-icon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/brand/popmov-icon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/brand/popmov-icon-48.png', sizes: '48x48', type: 'image/png' },
+      { url: '/brand/popmov-favicon.ico', sizes: '16x16 32x32 48x48', type: 'image/x-icon' },
+      { url: '/brand/popmov-icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/brand/popmov-icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/icons/apple-touch-icon.png?v=popmov-1', sizes: '180x180', type: 'image/png' }],
+    shortcut: [{ url: '/brand/popmov-icon-32.png', type: 'image/png' }],
+    apple: [{ url: '/brand/popmov-icon-180.png', sizes: '180x180', type: 'image/png' }],
   },
 };
 
