@@ -418,3 +418,56 @@ body {
 .art-video-player.has-playback-error .art-state {
   display: none !important;
 }
+
+@font-face {
+  font-family: 'Popmov Hand';
+  src: url('/fonts/kalam-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+.popmov-wordmark {
+  font-family: 'Popmov Hand', 'Chalkboard SE', cursive;
+  font-weight: 700;
+  letter-spacing: -.045em;
+  line-height: 1;
+  display: inline-block;
+  transform: rotate(-3deg);
+}
+.popmov-mascot { transition: transform .25s ease; }
+a:hover .popmov-mascot { transform: rotate(-7deg) scale(1.06); }
+.popmov-mascot-loading img { animation: popmov-hop 1.6s cubic-bezier(.4,0,.2,1) infinite; transform-origin: 50% 90%; }
+.popmov-sparkle { animation: popmov-twinkle 1.6s ease-in-out infinite; font-size: .8em; }
+.popmov-loader { animation: popmov-arrive .35s ease-out; }
+.popmov-loading-dots i { width: 5px; height: 5px; background: currentColor; border-radius: 50%; opacity: .3; animation: popmov-dot 1.2s ease-in-out infinite; }
+.popmov-loading-dots i:nth-child(2) { animation-delay: .15s; }
+.popmov-loading-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes popmov-hop {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1); }
+  35% { transform: translateY(-7px) rotate(4deg) scale(1.025); }
+  65% { transform: translateY(0) rotate(-2deg) scale(1.025,.975); }
+}
+@keyframes popmov-twinkle { 0%,100% { opacity: .3; transform: scale(.65) rotate(-15deg); } 40% { opacity: 1; transform: scale(1.15) rotate(10deg); } }
+@keyframes popmov-dot { 0%,100% { opacity: .25; transform: translateY(0); } 50% { opacity: .9; transform: translateY(-3px); } }
+@keyframes popmov-arrive { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .popmov-mascot-loading img, .popmov-sparkle, .popmov-loading-dots i, .popmov-loader { animation: none; }
+  .popmov-mascot { transition: none; }
+  a:hover .popmov-mascot { transform: none; }
+}
+
+/* Buffering inside ArtPlayer uses the same mascot as route and search loading. */
+.art-video-player .art-loading { flex-direction: column; gap: 12px; }
+.art-video-player .art-loading > * { display: none !important; }
+.art-video-player .art-loading::before {
+  content: ''; width: 64px; height: 64px; border-radius: 24%;
+  background: url('/brand/popmov-mark.webp') center / contain no-repeat;
+  animation: popmov-hop 1.6s ease-in-out infinite;
+}
+.art-video-player .art-loading::after {
+  content: 'POPMOV'; font: 700 24px / 1 'Popmov Hand', cursive; color: #fff;
+  letter-spacing: -.045em; transform: rotate(-3deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .art-video-player .art-loading::before { animation: none; }
+}

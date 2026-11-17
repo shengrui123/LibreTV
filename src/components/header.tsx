@@ -9,6 +9,7 @@ import { requestShowDownloadManager } from './download-manager';
 import { Icon, type IconName } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
+import { PopmovBrand } from './popmov-brand';
 import { AboutDialog } from './about-dialog';
 
 const SourceManagerDrawer = dynamic(() => import('./source-manager').then((mod) => mod.SourceManagerDrawer));
@@ -141,6 +142,7 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
             )}
           </div>
 
+          <Link href="/" aria-label="POPMOV 首页" className="pointer-events-auto shrink-0"><PopmovBrand className="max-sm:[&_.popmov-mascot]:h-8 max-sm:[&_.popmov-mascot]:w-8 max-sm:[&_.popmov-wordmark]:text-2xl" /></Link>
           <div className="flex-1" />
 
           {!searchPage && <div className="pointer-events-auto flex items-center gap-2">
@@ -247,9 +249,7 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
           )}
         >
           <div className="flex shrink-0 items-center justify-between px-2 pt-1 pb-3">
-            <span className="text-xl font-extrabold tracking-tight">
-              Libre<span className="text-brand">TV</span>
-            </span>
+            <Link href="/" aria-label="POPMOV 首页" onClick={() => setSidebarOpen(false)}><PopmovBrand /></Link>
             <button
               className="glass glass-clear w-9 h-9 grid place-items-center rounded-full transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               aria-label="关闭侧边栏"

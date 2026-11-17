@@ -1,5 +1,7 @@
 'use client';
 
+import { PopmovBrand } from './popmov-brand';
+
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, onUnauthorized, STATUS_QUERY_KEY } from '@/lib/client-api';
@@ -184,6 +186,7 @@ function LoginModal({
         aria-modal="true"
         aria-label={setupRequired ? '需要配置密码' : '访问验证'}
       >
+        <div className="mb-6 flex justify-center"><PopmovBrand /></div>
         {setupRequired ? (
           <>
             <h2 className="text-lg font-semibold text-content mb-3">需要配置密码</h2>

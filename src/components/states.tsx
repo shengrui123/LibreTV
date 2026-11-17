@@ -1,5 +1,6 @@
 'use client';
 
+import { PopmovMascot, PopmovLoader } from './popmov-brand';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Icon, type IconName } from './icon';
@@ -11,9 +12,9 @@ import { Icon, type IconName } from './icon';
  */
 
 const SPINNER_SIZE = {
-  sm: 'w-4 h-4 border-2',
-  md: 'w-8 h-8 border-4',
-  lg: 'w-9 h-9 border-4',
+  sm: 'w-5 h-5',
+  md: 'w-10 h-10',
+  lg: 'w-14 h-14',
 } as const;
 
 export function Spinner({
@@ -26,27 +27,12 @@ export function Spinner({
   tone?: 'default' | 'onDark';
   className?: string;
 }) {
-  return (
-    <span
-      className={cn(
-        'inline-block rounded-full animate-spin shrink-0',
-        SPINNER_SIZE[size],
-        tone === 'onDark' ? 'border-white/30 border-t-white' : 'border-line border-t-accent',
-        className
-      )}
-      aria-hidden
-    />
-  );
+  return <PopmovMascot animated className={cn(SPINNER_SIZE[size], tone === 'onDark' && 'drop-shadow-lg', className)} />;
 }
 
 /** 加载中：spinner + 可选文案（替代各处「纯文字 加载中...」） */
 export function LoadingState({ label, className }: { label?: string; className?: string }) {
-  return (
-    <div className={cn('flex flex-col items-center justify-center gap-3 py-10', className)}>
-      <Spinner size="md" />
-      {label && <p className="text-sm text-muted">{label}</p>}
-    </div>
-  );
+  return <PopmovLoader label={label} className={cn('py-10', className)} />;
 }
 
 export function EmptyState({

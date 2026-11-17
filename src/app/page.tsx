@@ -183,7 +183,7 @@ function HomeContent() {
     return (
       <div className="min-h-screen flex flex-col bg-page">
         <Header transparent />
-        <h1 className="sr-only">LibreTV</h1>
+        <h1 className="sr-only">POPMOV</h1>
         <HomeHero onPlay={playItem} onMore={openPreview} />
         <main className="relative z-10 -mt-8 md:-mt-10 flex-1 space-y-3 sm:space-y-5 pb-10">
           {customAPIs.length === 0 && envSources.length === 0 && <SetupBanner />}
@@ -399,7 +399,7 @@ function SetupBanner() {
         <img src="/icons/icon-192.png" alt="" className="w-10 h-10 rounded-[11px] shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-bold text-content">添加点播源，开始观看</div>
-          <div className="text-[12px] text-muted truncate">LibreTV 不内置片源 · 在设置中添加 Apple CMS 采集接口即可搜索播放</div>
+          <div className="text-[12px] text-muted truncate">POPMOV 不内置片源 · 在设置中添加 Apple CMS 采集接口即可搜索播放</div>
         </div>
         <button
           className="btn px-4 py-1.5 text-[13px] font-semibold bg-content text-page hover:opacity-90 shrink-0"
@@ -468,7 +468,7 @@ function NoSourceGuide({ hasSources = false }: { hasSources?: boolean }) {
           <>点击右上角「设置」，勾选要参与搜索的点播源后重新搜索。</>
         ) : (
           <>
-            LibreTV 不内置任何采集站。点击右上角「设置 → 添加 API」，填入一个
+            POPMOV 不内置任何采集站。点击右上角「设置 → 添加 API」，填入一个
             Apple CMS 采集站地址（如 <code className="text-accent text-xs">https://example.com/api.php/provide/vod</code>），
             勾选后即可开始搜索。
           </>

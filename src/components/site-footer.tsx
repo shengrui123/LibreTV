@@ -1,5 +1,7 @@
 'use client';
 
+import { PopmovWordmark } from './popmov-brand';
+
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth';
 
@@ -93,16 +95,16 @@ export function SiteFooter() {
     <footer className="border-t border-line py-4">
       <p className="text-center text-xs text-faint">
         <a
-          href="https://github.com/LibreSpark/LibreTV"
+          href="https://github.com/shengrui123/LibreTV"
           target="_blank"
           rel="noopener noreferrer"
           className="group relative inline-block cursor-help hover:text-accent"
         >
-          LibreTV{version ? ` v${version}` : ''}
+          <PopmovWordmark className="text-base" />{version ? ` v${version}` : ''}
           {version && <UpdateTip update={upstreamUpdate} />}
         </a>
         {' · '}
-        AGPL-3.0 License
+        基于 <a href="https://github.com/LibreSpark/LibreTV" target="_blank" rel="noopener noreferrer" className="hover:text-content">LibreTV</a> · AGPL-3.0 License
       </p>
     </footer>
   );

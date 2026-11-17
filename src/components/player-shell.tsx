@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { PopmovLoader } from './popmov-brand';
 import Artplayer from 'artplayer';
 import { createPortal } from 'react-dom';
 import Hls, { type HlsConfig } from 'hls.js';
@@ -729,7 +730,7 @@ export function PlayerShell({
       if (typeof height === 'number' && height > 0) reportQuality(height);
     };
     art.on('video:loadedmetadata', reportVideoHeight);
-    art.on('video:canplay', reportVideoHeight);
+    art.on('video:canplay', () => { reportVideoHeight(); if (art.video.paused) setShowPoster(false); });
     // resize 不在 ArtPlayer 的视频事件转发表里，直接挂原生事件
     art.video?.addEventListener('resize', reportVideoHeight);
 
@@ -1133,15 +1134,7 @@ export function PlayerShell({
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" style={{ WebkitTouchCallout: 'none' }} />
       {showPoster && !error && (
-        <div
-          className="absolute inset-0 bg-black pointer-events-none"
-          style={{
-            backgroundImage: 'url(/player-poster.png)',
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-          }}
-        />
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black pointer-events-none"><PopmovLoader label="好戏马上开始…" className="text-white [&_p]:text-white/60" /></div>
       )}
       {!error && skipPrompt && (
         <button

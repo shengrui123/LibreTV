@@ -6,6 +6,7 @@ import { api } from '@/lib/client-api';
 import { cn } from '@/lib/utils';
 import type { DoubanAbstract, DoubanItem } from '@/lib/types';
 import { Cover, useDoubanList, useHotList } from './home-rows';
+import { PopmovLoader } from './popmov-brand';
 import { Icon } from './icon';
 import { useFocusTrap } from './use-focus-trap';
 import { useToast } from './toast';
@@ -127,7 +128,7 @@ export function HomeHero({ onPlay, onMore }: { onPlay: (item: DoubanItem) => voi
   if (!current) {
     const doubanFailed = needFallback && douban.isError && (fallback.isError || (!fallback.isLoading && !fallback.data?.length));
     const failed = doubanFailed && (trending.isError || (trending.isSuccess && !trending.data.length));
-    return <section className="relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] bg-gradient-to-b from-white/5 to-transparent"><div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{failed ? '热门内容暂时无法获取' : '正在加载热门…'}</div></section>;
+    return <section className="relative w-full h-[min(150vw,660px)] md:h-[min(66vw,720px)] lg:h-[min(80vh,860px)] bg-gradient-to-b from-white/5 to-transparent"><div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{failed ? '热门内容暂时无法获取' : <PopmovLoader label="正在为你挑选好片…" />}</div></section>;
   }
 
   return (
