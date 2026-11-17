@@ -13,7 +13,7 @@ export function PopmovWordmark({ className }: { className?: string }) {
 }
 
 export function PopmovBrand({ className }: { className?: string }) {
-  return <span className={cn('inline-flex items-center gap-2', className)}><PopmovMascot className="h-10 w-10" /><PopmovWordmark className="text-[28px]" /></span>;
+  return <span aria-label="POPMOV" role="img" className={cn('inline-flex items-center', className)}><PopmovMascot className="h-10 w-10" /></span>;
 }
 
 export function PopmovLoader({ label = '小鹿正在准备好片…', className }: { label?: string; className?: string }) {
