@@ -142,7 +142,6 @@ function HeaderInner({ showSearch = false, transparent = false, searchPage = fal
             )}
           </div>
 
-          <Link href="/" aria-label="POPMOV 首页" className="pointer-events-auto shrink-0"><PopmovBrand className="max-sm:[&_.popmov-mascot]:h-8 max-sm:[&_.popmov-mascot]:w-8 max-sm:[&_.popmov-wordmark]:text-2xl" /></Link>
           <div className="flex-1" />
 
           {!searchPage && <div className="pointer-events-auto flex items-center gap-2">
